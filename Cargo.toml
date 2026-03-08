@@ -3,5 +3,11 @@ name = "herdingcats"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+description = "Deterministic rule orchestration for ambiguity-free turn-based games."
+repository = "https://github.com/mprelee/herdingcats"
+documentation = "https://docs.rs/herdingcats"
+readme = "README.md"
+keywords = ["game", "deterministic", "rules", "engine", "turn-based"]
+categories = ["game-development"]
 
 [dependencies]
