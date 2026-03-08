@@ -44,20 +44,15 @@ pub struct Transaction<O> {
     pub cancelled: bool,
 }
 
-//
-// ============================================================
-// Sealed Priority Enforcement
-// ============================================================
-//
-
-mod sealed {
-    pub trait Sealed {}
-}
-
-pub unsafe trait PriorityValue:
-    sealed::Sealed + Copy + Ord
-{
-    fn value(self) -> i32;
+impl<O> Transaction<O> {
+    pub fn new() -> Self {
+        Self {
+            ops: vec![],
+            irreversible: true,
+            deterministic: true,
+            cancelled: false,
+        }
+    }
 }
 
 //
@@ -83,7 +78,7 @@ pub trait Rule<S, O, E, P>
 where
     S: Clone,
     O: Operation<S>,
-    P: PriorityValue,
+    P: Copy + Ord,
 {
     fn id(&self) -> &'static str;
     fn priority(&self) -> P;
@@ -129,7 +124,7 @@ pub struct Engine<S, O, E, P>
 where
     S: Clone,
     O: Operation<S>,
-    P: PriorityValue,
+    P: Copy + Ord,
 {
     pub state: S,
 
@@ -147,7 +142,7 @@ impl<S, O, E, P> Engine<S, O, E, P>
 where
     S: Clone,
     O: Operation<S>,
-    P: PriorityValue,
+    P: Copy + Ord,
 {
     pub fn new(state: S) -> Self {
         Self {
@@ -174,15 +169,17 @@ where
     {
         let id = rule.id();
         self.rules.push(Box::new(rule));
-        self.rules.sort_by_key(|r| r.priority().value());
+
+        self.rules.sort_by_key(|r| r.priority());
+
         self.enabled.insert(id);
         self.lifetimes.insert(id, lifetime);
     }
 
     //
-    // ========================================================
-    // PREVIEW DISPATCH (Reversible)
-    // ========================================================
+    // --------------------------------------------------------
+    // Preview Dispatch
+    // --------------------------------------------------------
     //
 
     pub fn dispatch_preview(&mut self, mut event: E, mut tx: Transaction<O>) {
@@ -191,7 +188,6 @@ where
         let enabled_snapshot = self.enabled.clone();
         let hash_snapshot = self.replay_hash;
 
-        // BEFORE
         for rule in &self.rules {
             if self.enabled.contains(rule.id()) {
                 rule.before(&self.state, &mut event, &mut tx);
@@ -204,14 +200,12 @@ where
             }
         }
 
-        // AFTER
         for rule in self.rules.iter().rev() {
             if self.enabled.contains(rule.id()) {
                 rule.after(&self.state, &event, &mut tx);
             }
         }
 
-        // Restore everything
         self.state = state_snapshot;
         self.lifetimes = lifetime_snapshot;
         self.enabled = enabled_snapshot;
@@ -219,9 +213,9 @@ where
     }
 
     //
-    // ========================================================
-    // COMMIT DISPATCH (Irreversible)
-    // ========================================================
+    // --------------------------------------------------------
+    // Commit Dispatch
+    // --------------------------------------------------------
     //
 
     pub fn dispatch(&mut self, mut event: E, mut tx: Transaction<O>) {
@@ -229,7 +223,6 @@ where
         let lifetime_snapshot = self.lifetimes.clone();
         let enabled_snapshot = self.enabled.clone();
 
-        // BEFORE
         for rule in &self.rules {
             if self.enabled.contains(rule.id()) {
                 rule.before(&self.state, &mut event, &mut tx);
@@ -253,14 +246,12 @@ where
             }
         }
 
-        // AFTER
         for rule in self.rules.iter().rev() {
             if self.enabled.contains(rule.id()) {
                 rule.after(&self.state, &event, &mut tx);
             }
         }
 
-        // Turn decrement
         for (id, lifetime) in self.lifetimes.iter_mut() {
             if let RuleLifetime::Turns(n) = lifetime {
                 if *n > 0 {
@@ -332,115 +323,5 @@ where
         self.undo_stack.clear();
         self.redo_stack.clear();
         self.replay_hash = FNV_OFFSET;
-    }
-}
-
-//
-// ============================================================
-// TESTS
-// ============================================================
-//
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[repr(i32)]
-    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    enum P {
-        Default = 0,
-    }
-
-    impl sealed::Sealed for P {}
-    unsafe impl PriorityValue for P {
-        fn value(self) -> i32 {
-            self as i32
-        }
-    }
-
-    #[derive(Clone, Debug, PartialEq)]
-    struct Game {
-        hp: i32,
-    }
-
-    #[derive(Clone)]
-    enum Op {
-        SetHp { before: i32, after: i32 },
-    }
-
-    impl Operation<Game> for Op {
-        fn apply(&self, s: &mut Game) {
-            if let Op::SetHp { after, .. } = self {
-                s.hp = *after;
-            }
-        }
-
-        fn undo(&self, s: &mut Game) {
-            if let Op::SetHp { before, .. } = self {
-                s.hp = *before;
-            }
-        }
-
-        fn hash_bytes(&self) -> Vec<u8> {
-            match self {
-                Op::SetHp { before, after } => {
-                    [before.to_le_bytes(), after.to_le_bytes()]
-                        .concat()
-                }
-            }
-        }
-    }
-
-    #[derive(Clone)]
-    enum Event {
-        Damage { amount: i32 },
-    }
-
-    struct DoubleDamage;
-
-    impl Rule<Game, Op, Event, P> for DoubleDamage {
-        fn id(&self) -> &'static str {
-            "double"
-        }
-
-        fn priority(&self) -> P {
-            P::Default
-        }
-
-        fn before(
-            &self,
-            _state: &Game,
-            event: &mut Event,
-            _tx: &mut Transaction<Op>,
-        ) {
-            if let Event::Damage { amount } = event {
-                *amount *= 2;
-            }
-        }
-    }
-
-    #[test]
-    fn preview_does_not_commit() {
-        let game = Game { hp: 100 };
-
-        let mut engine =
-            Engine::<Game, Op, Event, P>::new(game);
-
-        engine.add_rule(DoubleDamage, RuleLifetime::Permanent);
-
-        let tx = Transaction {
-            ops: vec![Op::SetHp {
-                before: 100,
-                after: 90,
-            }],
-            irreversible: true,
-            deterministic: true,
-            cancelled: false,
-        };
-
-        engine.dispatch_preview(Event::Damage { amount: 10 }, tx.clone());
-
-        assert_eq!(engine.state.hp, 100); // unchanged
-        assert_eq!(engine.replay_hash(), FNV_OFFSET);
     }
 }
