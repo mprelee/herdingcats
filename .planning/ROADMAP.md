@@ -27,7 +27,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Five module files exist (`hash.rs`, `operation.rs`, `transaction.rs`, `rule.rs`, `engine.rs`) and `lib.rs` contains only `mod` declarations and explicit `pub use` re-exports
   3. Every module file contains an inline `#[cfg(test)]` block; `Operation` apply+undo roundtrip and `hash_bytes()` determinism are both tested
   4. Every public type, trait, and method has a `///` rustdoc comment including a `/// # Examples` block; `cargo doc --no-deps` generates without warnings
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Module split: create 5 module files, thin lib.rs facade, add proptest dep
+- [ ] 01-02-PLAN.md — Unit tests: #[cfg(test)] blocks in all modules, counter fixture, apply+undo roundtrip
+- [ ] 01-03-PLAN.md — Rustdoc: /// on all public items, // on internals, # Examples blocks, zero doc warnings
 
 ### Phase 2: Engine Property Tests
 **Goal**: The engine's determinism and undo/redo correctness are machine-verifiable — proptest runs confirm all core invariants hold for arbitrary inputs
@@ -59,6 +64,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Module Split and Foundation | 0/TBD | Not started | - |
+| 1. Module Split and Foundation | 0/3 | Not started | - |
 | 2. Engine Property Tests | 0/TBD | Not started | - |
 | 3. Backgammon Example and Integration Properties | 0/TBD | Not started | - |
