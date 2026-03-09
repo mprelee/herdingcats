@@ -4,6 +4,7 @@ Deterministic rule orchestration for turn-based games.
 
 Author:  Madeline Prelee (mprelee@gmail.com)
 
+
 ## Overview
 
 `herdingcats` is a generic engine for implementing deterministic, rule-driven turn-based systems.
