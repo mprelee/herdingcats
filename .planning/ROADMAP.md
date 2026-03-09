@@ -64,6 +64,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Module Split and Foundation | 1/3 | In Progress|  |
+| 1. Module Split and Foundation | 2/3 | In Progress|  |
 | 2. Engine Property Tests | 0/TBD | Not started | - |
 | 3. Backgammon Example and Integration Properties | 0/TBD | Not started | - |

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 01-module-split-and-foundation-01-PLAN.md
-last_updated: "2026-03-09T03:29:52.614Z"
+stopped_at: Completed 01-module-split-and-foundation-02-PLAN.md
+last_updated: "2026-03-09T03:32:56.930Z"
 last_activity: 2026-03-08 — Roadmap created; phases derived from requirements
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 01-module-split-and-foundation P01 | 8 | 2 tasks | 7 files |
+| Phase 01-module-split-and-foundation P02 | 2 | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,7 @@ Recent decisions affecting current work:
 - [Phase 01-module-split-and-foundation]: hash module is private (mod hash, not pub mod hash) — fnv1a_hash and FNV constants are pub(crate) only
 - [Phase 01-module-split-and-foundation]: #![warn(missing_docs)] added to lib.rs in Plan 01 so Plan 03 doc work has compile-time guard from the start
 - [Phase 01-module-split-and-foundation]: RuleLifetime enum placed in transaction.rs alongside Transaction struct — cohesion over granularity
+- [Phase 01-module-split-and-foundation]: CounterOp uses Reset{prior:i32} to store prior value so undo can restore exactly — makes undo correctness self-documenting in tests
 
 ### Pending Todos
 
@@ -78,6 +80,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T03:29:52.612Z
-Stopped at: Completed 01-module-split-and-foundation-01-PLAN.md
+Last session: 2026-03-09T03:32:56.929Z
+Stopped at: Completed 01-module-split-and-foundation-02-PLAN.md
 Resume file: None

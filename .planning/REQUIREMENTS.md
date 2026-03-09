@@ -13,10 +13,10 @@
 
 ### Unit Tests
 
-- [ ] **TEST-01**: Every source file (`hash.rs`, `operation.rs`, `transaction.rs`, `rule.rs`, `engine.rs`) contains an inline `#[cfg(test)]` module with unit tests
+- [x] **TEST-01**: Every source file (`hash.rs`, `operation.rs`, `transaction.rs`, `rule.rs`, `engine.rs`) contains an inline `#[cfg(test)]` module with unit tests
 - [x] **TEST-02**: `proptest = "1.10"` added to `[dev-dependencies]` in `Cargo.toml` — zero impact on release build
-- [ ] **TEST-03**: `Operation` apply+undo roundtrip verified: `op.apply(&mut s); op.undo(&mut s)` returns state identical to before apply, for every op variant
-- [ ] **TEST-04**: `hash_bytes()` returns non-empty `Vec<u8>` for every `Operation` variant, and identical input produces identical output (determinism)
+- [x] **TEST-03**: `Operation` apply+undo roundtrip verified: `op.apply(&mut s); op.undo(&mut s)` returns state identical to before apply, for every op variant
+- [x] **TEST-04**: `hash_bytes()` returns non-empty `Vec<u8>` for every `Operation` variant, and identical input produces identical output (determinism)
 
 ### Engine Property Tests
 
@@ -71,10 +71,10 @@
 | MOD-01 | Phase 1 | Complete |
 | MOD-02 | Phase 1 | Complete |
 | MOD-03 | Phase 1 | Complete |
-| TEST-01 | Phase 1 | Pending |
+| TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 1 | Complete |
-| TEST-03 | Phase 1 | Pending |
-| TEST-04 | Phase 1 | Pending |
+| TEST-03 | Phase 1 | Complete |
+| TEST-04 | Phase 1 | Complete |
 | DOC-01 | Phase 1 | Pending |
 | DOC-02 | Phase 1 | Pending |
 | DOC-03 | Phase 1 | Pending |
