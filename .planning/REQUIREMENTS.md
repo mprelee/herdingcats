@@ -7,14 +7,14 @@
 
 ### Module Structure
 
-- [ ] **MOD-01**: `src/lib.rs` is split into `src/hash.rs`, `src/operation.rs`, `src/transaction.rs`, `src/rule.rs`, `src/engine.rs` — one concept per file
-- [ ] **MOD-02**: `src/lib.rs` becomes a thin re-export facade (`mod` declarations + `pub use` for all currently-public items); `hash` module stays `pub(crate)` only
-- [ ] **MOD-03**: `examples/tictactoe.rs` compiles and runs identically after the split — no changes to example code, no changes to public API surface
+- [x] **MOD-01**: `src/lib.rs` is split into `src/hash.rs`, `src/operation.rs`, `src/transaction.rs`, `src/rule.rs`, `src/engine.rs` — one concept per file
+- [x] **MOD-02**: `src/lib.rs` becomes a thin re-export facade (`mod` declarations + `pub use` for all currently-public items); `hash` module stays `pub(crate)` only
+- [x] **MOD-03**: `examples/tictactoe.rs` compiles and runs identically after the split — no changes to example code, no changes to public API surface
 
 ### Unit Tests
 
 - [ ] **TEST-01**: Every source file (`hash.rs`, `operation.rs`, `transaction.rs`, `rule.rs`, `engine.rs`) contains an inline `#[cfg(test)]` module with unit tests
-- [ ] **TEST-02**: `proptest = "1.10"` added to `[dev-dependencies]` in `Cargo.toml` — zero impact on release build
+- [x] **TEST-02**: `proptest = "1.10"` added to `[dev-dependencies]` in `Cargo.toml` — zero impact on release build
 - [ ] **TEST-03**: `Operation` apply+undo roundtrip verified: `op.apply(&mut s); op.undo(&mut s)` returns state identical to before apply, for every op variant
 - [ ] **TEST-04**: `hash_bytes()` returns non-empty `Vec<u8>` for every `Operation` variant, and identical input produces identical output (determinism)
 
@@ -68,11 +68,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOD-01 | Phase 1 | Pending |
-| MOD-02 | Phase 1 | Pending |
-| MOD-03 | Phase 1 | Pending |
+| MOD-01 | Phase 1 | Complete |
+| MOD-02 | Phase 1 | Complete |
+| MOD-03 | Phase 1 | Complete |
 | TEST-01 | Phase 1 | Pending |
-| TEST-02 | Phase 1 | Pending |
+| TEST-02 | Phase 1 | Complete |
 | TEST-03 | Phase 1 | Pending |
 | TEST-04 | Phase 1 | Pending |
 | DOC-01 | Phase 1 | Pending |
