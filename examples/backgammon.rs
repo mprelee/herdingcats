@@ -1,4 +1,4 @@
-#[allow(clippy::enum_variant_names)]
+#![allow(clippy::enum_variant_names)]
 use herdingcats::*;
 use std::fmt;
 
