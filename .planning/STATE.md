@@ -1,36 +1,35 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: milestone
-status: planning
-stopped_at: Completed 03-backgammon-example-and-integration-properties-03-02-PLAN.md
-last_updated: "2026-03-09T06:42:11.133Z"
-last_activity: 2026-03-08 — Roadmap created; phases derived from requirements
+milestone_name: Refactor and Test
+status: complete
+stopped_at: v1.0 milestone complete — archived 2026-03-09
+last_updated: "2026-03-09"
+last_activity: 2026-03-09 — v1.0 milestone complete
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 6
   completed_plans: 6
-  percent: 0
+  percent: 100
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-08)
+See: .planning/PROJECT.md (updated 2026-03-09 after v1.0 milestone)
 
-**Core value:** The engine's determinism and undo/redo correctness must be provably sound — property-based tests using proptest should make this machine-verifiable, not just manually checked.
-**Current focus:** Phase 1 — Module Split and Foundation
+**Core value:** The engine's determinism and undo/redo correctness must be provably sound — property-based tests using proptest make this machine-verifiable, not just manually checked.
+**Current focus:** v1.0 milestone complete — planning next milestone
 
 ## Current Position
 
-Phase: 1 of 3 (Module Split and Foundation)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-08 — Roadmap created; phases derived from requirements
+Phase: v1.0 complete (3/3 phases, 6/6 plans)
+Status: Milestone shipped
+Last activity: 2026-03-09 — v1.0 milestone archived
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -92,7 +91,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- [Phase 3 risk]: Backgammon board representation (`[i8; 26]`) is MEDIUM-confidence. Validate bearing-off and hit/reenter op correctness early in Phase 3 before building proptest strategy infrastructure around it.
+None — v1.0 complete. All phase risks resolved.
+- ~~[Phase 3 risk]: Backgammon board representation (`[i8; 26]`) is MEDIUM-confidence.~~ **Resolved in Phase 3 Plan 01 — BearOffOp writes home counters, not board[26]; all roundtrip tests pass.**
 
 ## Session Continuity
 

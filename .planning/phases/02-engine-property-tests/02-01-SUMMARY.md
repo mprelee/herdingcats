@@ -99,6 +99,14 @@ None - no external service configuration required.
 - All four PROP requirements complete; engine correctness is now machine-verifiable
 - Phase 3 (backgammon board) can proceed — validate `[i8; 26]` bearing-off representation early before building proptest strategies around it (existing blocker from STATE.md)
 
+## Self-Check: PASSED
+
+- `src/engine.rs` exists with `mod props` block containing 5 property tests
+- `.planning/phases/02-engine-property-tests/02-01-SUMMARY.md` exists
+- Commit `631d219` (Task 1) confirmed in git log
+- Commit `11c9bdb` (Task 2) confirmed in git log
+- `cargo test` passes: 19 unit tests + 15 doc tests, all green
+
 ---
 *Phase: 02-engine-property-tests*
 *Completed: 2026-03-08*
