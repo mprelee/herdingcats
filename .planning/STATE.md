@@ -100,8 +100,14 @@ None yet.
 None — v1.0 complete. All phase risks resolved.
 - ~~[Phase 3 risk]: Backgammon board representation (`[i8; 26]`) is MEDIUM-confidence.~~ **Resolved in Phase 3 Plan 01 — BearOffOp writes home counters, not board[26]; all roundtrip tests pass.**
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Add clippy + fmt CI checks | 2026-03-09 | 73d8910 | [1-add-clippy-fmt-ci-checks](./quick/1-add-clippy-fmt-ci-checks/) |
+
 ## Session Continuity
 
 Last session: 2026-03-09T08:37:25.187Z
-Stopped at: Completed quick-1-add-clippy-fmt-ci-checks-1-PLAN.md
+Stopped at: Completed quick task 1: Add clippy + fmt CI checks
 Resume file: None
