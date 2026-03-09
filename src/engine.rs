@@ -9,13 +9,41 @@ use crate::operation::Operation;
 use crate::rule::Rule;
 use crate::transaction::{RuleLifetime, Transaction};
 
+// A single entry on the undo stack, capturing everything needed to reverse
+// one committed transaction and restore the engine to its prior state.
+//
+// CommitFrame is the key to undo correctness: rather than storing full state
+// snapshots (expensive for large game states), the engine stores just enough
+// to *reverse* the commit. Fields:
 #[derive(Clone)]
 struct CommitFrame<S, O> {
+    // The transaction that was committed. Used in reverse (ops.iter().rev())
+    // during undo to call op.undo() on each operation in reverse order.
     tx: Transaction<O>,
+
+    // The replay_hash value *before* this transaction was applied. Restored
+    // directly on undo so the fingerprint matches pre-commit state without
+    // replaying the full history.
     state_hash_before: u64,
+
+    // The replay_hash value *after* this transaction was applied. Restored
+    // directly on redo so re-applying the frame doesn't re-hash the ops.
     state_hash_after: u64,
+
+    // Snapshot of rule lifetimes at the moment this transaction was committed.
+    // Restored on undo so turn-limited and trigger-counted rules rewind to
+    // their pre-commit counts — the rule lifecycle mirrors the game state.
     lifetime_snapshot: HashMap<&'static str, RuleLifetime>,
+
+    // Snapshot of the enabled rule set at the moment this transaction was
+    // committed. Restored on undo so rules that expired during this commit
+    // are re-enabled, and rules that were disabled before are not re-enabled.
     enabled_snapshot: HashSet<&'static str>,
+
+    // PhantomData marker for the state type S. CommitFrame<S, O> does not own
+    // an S directly (state is held by the Engine), but the type parameter is
+    // needed for variance: covariant in S so CommitFrame<&'long T> is usable
+    // where CommitFrame<&'short T> is expected.
     _marker: std::marker::PhantomData<S>,
 }
 
@@ -23,12 +51,30 @@ struct CommitFrame<S, O> {
 // Engine
 // ============================================================
 
+/// The runtime that manages game state, rules, and commit history.
+///
+/// `Engine<S, O, E, P>` is the central coordinator: it holds the current
+/// state `S`, a sorted list of [`Rule`]s, and an undo/redo stack of commit
+/// frames. To advance state, callers construct a [`Transaction`] and pass
+/// it — along with an event value — to [`dispatch`](Engine::dispatch). The
+/// engine runs all enabled rules in priority order, applies the resulting
+/// operations, and records the frame for undo. Direct mutation of
+/// [`state`](Engine::state) is possible but bypasses the rule system; use
+/// [`write`](Engine::write) for intentional resets.
 pub struct Engine<S, O, E, P>
 where
     S: Clone,
     O: Operation<S>,
     P: Copy + Ord,
 {
+    /// The current committed game state.
+    ///
+    /// Readable directly for ergonomic access in non-rule contexts. Prefer
+    /// [`read`](Engine::read) when you want a clone rather than a borrow.
+    /// **Direct mutation of this field bypasses the rule system and undo
+    /// stack** — use [`write`](Engine::write) for intentional state resets
+    /// (e.g., loading a saved game), which also clears both stacks and
+    /// resets the `replay_hash`.
     pub state: S,
 
     undo_stack: Vec<CommitFrame<S, O>>,
@@ -47,6 +93,28 @@ where
     O: Operation<S>,
     P: Copy + Ord,
 {
+    /// Create a new engine with the given initial state and no rules.
+    ///
+    /// The undo and redo stacks start empty. `replay_hash` is initialized to
+    /// `FNV_OFFSET` (the hash of an empty sequence). Add rules with
+    /// [`add_rule`](Engine::add_rule) before dispatching events.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Operation};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Operation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    /// }
+    ///
+    /// let engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+    /// assert_eq!(engine.state, 0);
+    /// ```
     pub fn new(state: S) -> Self {
         Self {
             state,
@@ -59,10 +127,72 @@ where
         }
     }
 
+    /// Return the current replay hash — a running fingerprint over all
+    /// committed, deterministic operations.
+    ///
+    /// The replay hash is updated on every [`dispatch`](Engine::dispatch) call
+    /// where the transaction is both `irreversible` and `deterministic`. Two
+    /// engine instances that have processed the same sequence of deterministic
+    /// operations will have identical replay hashes, regardless of any
+    /// non-deterministic or irreversible commits in between.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Operation, Transaction, RuleLifetime};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Operation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    /// }
+    ///
+    /// let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+    /// let hash_before = engine.replay_hash();
+    ///
+    /// let mut tx = Transaction::new();
+    /// tx.ops.push(CounterOp::Inc);
+    /// engine.dispatch((), tx);
+    ///
+    /// assert_ne!(engine.replay_hash(), hash_before);
+    /// ```
     pub fn replay_hash(&self) -> u64 {
         self.replay_hash
     }
 
+    /// Register a rule with this engine and assign it a lifetime.
+    ///
+    /// The rule is inserted into the sorted rule list (sorted by
+    /// [`priority`](crate::Rule::priority) ascending). The rule starts
+    /// enabled; the [`RuleLifetime`] controls when it is automatically
+    /// disabled. If a rule with the same `id` is added twice, both rule
+    /// objects remain in the list, but they share a lifetime entry — the
+    /// second `add_rule` overwrites the first's lifetime.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Operation, Rule, Transaction, RuleLifetime};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Operation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    /// }
+    ///
+    /// struct NoRule;
+    /// impl Rule<i32, CounterOp, (), u8> for NoRule {
+    ///     fn id(&self) -> &'static str { "no_rule" }
+    ///     fn priority(&self) -> u8 { 0 }
+    /// }
+    ///
+    /// let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+    /// engine.add_rule(NoRule, RuleLifetime::Permanent);
+    /// ```
     pub fn add_rule<R>(
         &mut self,
         rule: R,
@@ -85,6 +215,43 @@ where
     // --------------------------------------------------------
     //
 
+    /// Run the full dispatch pipeline on `event` and `tx` without committing
+    /// any changes to state, replay hash, or rule lifetimes.
+    ///
+    /// `dispatch_preview` is a dry run: all enabled rules fire their `before`
+    /// and `after` hooks, operations are applied, but everything is rolled back
+    /// at the end. This is useful for AI look-ahead, UI preview of pending
+    /// moves, or testing rule interactions without side effects.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Operation, Rule, Transaction, RuleLifetime};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Operation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    /// }
+    ///
+    /// struct NoRule;
+    /// impl Rule<i32, CounterOp, (), u8> for NoRule {
+    ///     fn id(&self) -> &'static str { "no_rule" }
+    ///     fn priority(&self) -> u8 { 0 }
+    /// }
+    ///
+    /// let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+    /// engine.add_rule(NoRule, RuleLifetime::Permanent);
+    ///
+    /// let mut tx = Transaction::new();
+    /// tx.ops.push(CounterOp::Inc);
+    /// engine.dispatch_preview((), tx);
+    ///
+    /// // State is unchanged after preview
+    /// assert_eq!(engine.state, 0);
+    /// ```
     pub fn dispatch_preview(&mut self, mut event: E, mut tx: Transaction<O>) {
         let state_snapshot = self.state.clone();
         let lifetime_snapshot = self.lifetimes.clone();
@@ -121,6 +288,44 @@ where
     // --------------------------------------------------------
     //
 
+    /// Dispatch `event` through all enabled rules, apply the resulting
+    /// operations, and — if the transaction is reversible — push a
+    /// `CommitFrame` onto the undo stack.
+    ///
+    /// Rules fire in ascending priority order during `before()`, then
+    /// descending order during `after()`. If any rule sets `tx.cancelled =
+    /// true`, the operations are not applied and no frame is committed.
+    /// Rule lifetimes ([`Turns`](RuleLifetime::Turns),
+    /// [`Triggers`](RuleLifetime::Triggers)) are decremented here.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Operation, Rule, Transaction, RuleLifetime};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Operation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    /// }
+    ///
+    /// struct NoRule;
+    /// impl Rule<i32, CounterOp, (), u8> for NoRule {
+    ///     fn id(&self) -> &'static str { "no_rule" }
+    ///     fn priority(&self) -> u8 { 0 }
+    /// }
+    ///
+    /// let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+    /// engine.add_rule(NoRule, RuleLifetime::Permanent);
+    ///
+    /// let mut tx = Transaction::new();
+    /// tx.ops.push(CounterOp::Inc);
+    /// engine.dispatch((), tx);
+    ///
+    /// assert_eq!(engine.state, 1);
+    /// ```
     pub fn dispatch(&mut self, mut event: E, mut tx: Transaction<O>) {
         let hash_before = self.replay_hash;
         let lifetime_snapshot = self.lifetimes.clone();
@@ -189,6 +394,42 @@ where
         }
     }
 
+    /// Reverse the most recent reversible commit, restoring state and rule
+    /// lifetimes to their values before that commit.
+    ///
+    /// If the undo stack is empty, this is a no-op. The undone frame is moved
+    /// to the redo stack so [`redo`](Engine::redo) can re-apply it.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Operation, Rule, Transaction, RuleLifetime};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Operation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    /// }
+    ///
+    /// struct NoRule;
+    /// impl Rule<i32, CounterOp, (), u8> for NoRule {
+    ///     fn id(&self) -> &'static str { "no_rule" }
+    ///     fn priority(&self) -> u8 { 0 }
+    /// }
+    ///
+    /// let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+    /// engine.add_rule(NoRule, RuleLifetime::Permanent);
+    ///
+    /// let mut tx = Transaction::new();
+    /// tx.ops.push(CounterOp::Inc);
+    /// engine.dispatch((), tx);
+    /// assert_eq!(engine.state, 1);
+    ///
+    /// engine.undo();
+    /// assert_eq!(engine.state, 0);
+    /// ```
     pub fn undo(&mut self) {
         if let Some(frame) = self.undo_stack.pop() {
             for op in frame.tx.ops.iter().rev() {
@@ -203,6 +444,44 @@ where
         }
     }
 
+    /// Re-apply the most recently undone commit, advancing state forward again.
+    ///
+    /// If the redo stack is empty, this is a no-op. The redone frame is moved
+    /// back to the undo stack. Note that calling [`dispatch`](Engine::dispatch)
+    /// clears the redo stack — once you commit a new action, the redo history
+    /// for the previous branch is discarded.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Operation, Rule, Transaction, RuleLifetime};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Operation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    /// }
+    ///
+    /// struct NoRule;
+    /// impl Rule<i32, CounterOp, (), u8> for NoRule {
+    ///     fn id(&self) -> &'static str { "no_rule" }
+    ///     fn priority(&self) -> u8 { 0 }
+    /// }
+    ///
+    /// let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+    /// engine.add_rule(NoRule, RuleLifetime::Permanent);
+    ///
+    /// let mut tx = Transaction::new();
+    /// tx.ops.push(CounterOp::Inc);
+    /// engine.dispatch((), tx);
+    /// engine.undo();
+    /// assert_eq!(engine.state, 0);
+    ///
+    /// engine.redo();
+    /// assert_eq!(engine.state, 1);
+    /// ```
     pub fn redo(&mut self) {
         if let Some(frame) = self.redo_stack.pop() {
             for op in &frame.tx.ops {
@@ -217,10 +496,77 @@ where
         }
     }
 
+    /// Return a clone of the current state.
+    ///
+    /// Use `read` when you need an owned snapshot rather than borrowing
+    /// `engine.state` directly. This is the idiomatic way to hand state to
+    /// code that needs ownership (e.g., serialization, AI evaluation).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Operation};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Operation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    /// }
+    ///
+    /// let engine: Engine<i32, CounterOp, (), u8> = Engine::new(42i32);
+    /// let snapshot = engine.read();
+    /// assert_eq!(snapshot, 42);
+    /// ```
     pub fn read(&self) -> S {
         self.state.clone()
     }
 
+    /// Replace the engine's state with `snapshot` and reset all history.
+    ///
+    /// `write` clears both the undo and redo stacks and resets `replay_hash`
+    /// to its initial value. Use it for intentional state resets — loading a
+    /// saved game, starting a new round — where you want to discard all prior
+    /// history. Unlike direct mutation of `engine.state`, `write` guarantees
+    /// the stacks and hash are coherent with the new state.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Operation, Rule, Transaction, RuleLifetime};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Operation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    /// }
+    ///
+    /// struct NoRule;
+    /// impl Rule<i32, CounterOp, (), u8> for NoRule {
+    ///     fn id(&self) -> &'static str { "no_rule" }
+    ///     fn priority(&self) -> u8 { 0 }
+    /// }
+    ///
+    /// let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+    /// engine.add_rule(NoRule, RuleLifetime::Permanent);
+    ///
+    /// let mut tx = Transaction::new();
+    /// tx.ops.push(CounterOp::Inc);
+    /// engine.dispatch((), tx);
+    /// assert_eq!(engine.state, 1);
+    ///
+    /// // Reset to a fresh state — undo history is cleared
+    /// engine.write(100);
+    /// assert_eq!(engine.state, 100);
+    /// let hash_after_write = engine.replay_hash();
+    ///
+    /// // replay_hash is back to its initial value
+    /// let fresh_engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+    /// assert_eq!(hash_after_write, fresh_engine.replay_hash());
+    /// ```
     pub fn write(&mut self, snapshot: S) {
         self.state = snapshot;
         self.undo_stack.clear();
