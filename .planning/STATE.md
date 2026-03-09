@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: Refactor and Test
-status: complete
-stopped_at: v1.0 milestone complete — archived 2026-03-09
-last_updated: "2026-03-09"
-last_activity: 2026-03-09 — v1.0 milestone complete
+milestone_name: milestone
+status: Milestone shipped
+stopped_at: Completed quick-1-add-clippy-fmt-ci-checks-1-PLAN.md
+last_updated: "2026-03-09T08:37:25.188Z"
+last_activity: 2026-03-09 — v1.0 milestone archived
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_phases: 2
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
   percent: 100
 ---
 
@@ -84,6 +84,12 @@ Recent decisions affecting current work:
 - [Phase 03-backgammon-example-and-integration-properties]: RollDiceRule.before() sets tx.irreversible=false (not main()) — rules own behavioral semantics
 - [Phase 03-backgammon-example-and-integration-properties]: prop_board_conservation uses apply+undo pairs at op level — tests conservation independently of game state validity
 - [Phase 03-backgammon-example-and-integration-properties]: BackgammonOp derives Debug — required by proptest Strategy::prop_map bound
+- [Phase quick-1-add-clippy-fmt-ci-checks]: rustfmt.toml kept minimal (edition only) — no opinionated formatting rules beyond edition pin
+- [Phase quick-1-add-clippy-fmt-ci-checks]: CI workflow already had correct fmt/clippy/test steps — no changes needed to rust.yml
+
+### Roadmap Evolution
+
+- Phase 1 added: Add checks for clippy and cargo fmt, etc
 
 ### Pending Todos
 
@@ -94,8 +100,14 @@ None yet.
 None — v1.0 complete. All phase risks resolved.
 - ~~[Phase 3 risk]: Backgammon board representation (`[i8; 26]`) is MEDIUM-confidence.~~ **Resolved in Phase 3 Plan 01 — BearOffOp writes home counters, not board[26]; all roundtrip tests pass.**
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Add clippy + fmt CI checks | 2026-03-09 | 73d8910 | [1-add-clippy-fmt-ci-checks](./quick/1-add-clippy-fmt-ci-checks/) |
+
 ## Session Continuity
 
-Last session: 2026-03-09T06:39:12.235Z
-Stopped at: Completed 03-backgammon-example-and-integration-properties-03-02-PLAN.md
+Last session: 2026-03-09T08:37:25.187Z
+Stopped at: Completed quick task 1: Add clippy + fmt CI checks
 Resume file: None
