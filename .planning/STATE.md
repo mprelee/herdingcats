@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: pest feature (PEG parser)
-status: Executing Phase 5
-stopped_at: Completed 05-02-PLAN.md
+status: Ready to Plan Phase 6
+stopped_at: Completed 05-03-PLAN.md
 last_updated: "2026-03-09T00:00:00.000Z"
-last_activity: 2026-03-09 — Completed 05-02-PLAN.md
+last_activity: 2026-03-09 — Completed 05-03-PLAN.md
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 3
+  completed_phases: 2
+  total_plans: 7
+  completed_plans: 5
+  percent: 83
 ---
 
 # Project State
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-09 after starting v1.1 milestone)
 
 **Core value:** The engine's determinism and undo/redo correctness must be provably sound — property-based tests using proptest make this machine-verifiable, not just manually checked.
-**Current focus:** v1.1 Pest Feature (PEG Parser) — executing Phase 5
+**Current focus:** v1.1 Pest Feature (PEG Parser) — ready to plan Phase 6
 
 ## Current Position
 
-Phase: 5
-Plan: 05-03
-Status: Executing Phase 5
-Last activity: 2026-03-09 — Completed 05-02-PLAN.md
-Progress: [███████░░░] 67%
+Phase: 6
+Plan: -
+Status: Ready to Plan Phase 6
+Last activity: 2026-03-09 — Completed 05-03-PLAN.md
+Progress: [████████░░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
+- Total plans completed: 5
 - Average duration: -
 - Total execution time: 0 hours
 
@@ -42,11 +42,12 @@ Progress: [███████░░░] 67%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 4. DSL Scope and Semantic Contract | 2 | 2026-03-09 | 1.0 |
+| 5. Build-Time Compiler and Example Integration | 3 | 2026-03-09 | 1.0 |
 
 **Recent Trend:**
-- Last 5 plans: n/a
-- Trend: n/a
+- Last 5 plans: 04-01, 04-02, 05-01, 05-02, 05-03
+- Trend: steady
 
 *Updated after each plan completion*
 | Phase 01-module-split-and-foundation P01 | 8 | 2 tasks | 7 files |
@@ -86,6 +87,9 @@ Recent decisions affecting current work:
 - [Phase 03-backgammon-example-and-integration-properties]: BackgammonOp derives Debug — required by proptest Strategy::prop_map bound
 - [Phase quick-1-add-clippy-fmt-ci-checks]: rustfmt.toml kept minimal (edition only) — no opinionated formatting rules beyond edition pin
 - [Phase quick-1-add-clippy-fmt-ci-checks]: CI workflow already had correct fmt/clippy/test steps — no changes needed to rust.yml
+- [Phase 05-build-time-compiler-and-example-integration]: Runtime codegen emits a nested `generated_rules` module so included output has a stable namespace inside consumer crates
+- [Phase 05-build-time-compiler-and-example-integration]: Generated runtime code references consumer types from parent scope and uses fully qualified `herdingcats` paths to avoid `include!` import conflicts
+- [Phase 05-build-time-compiler-and-example-integration]: Integration proof uses a real nested Cargo consumer executed from tests rather than a mocked registration path
 
 ### Roadmap Evolution
 

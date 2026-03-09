@@ -51,7 +51,7 @@ Plans:
 Plans:
 - [x] 05-01-PLAN.md — Parser implementation: `pest` grammar wiring, AST construction, and parse-time diagnostics
 - [x] 05-02-PLAN.md — Code generation: Rust emission for generated ops/rules plus registration helper
-- [ ] 05-03-PLAN.md — Integration example: consumer `build.rs`, generated module inclusion, and end-to-end fixture/example
+- [x] 05-03-PLAN.md — Integration example: consumer `build.rs`, generated module inclusion, and end-to-end fixture/example
 
 ### Phase 6: Validation and Release Hardening
 **Goal**: Prove generated rules preserve `herdingcats` invariants and harden the public integration surface for release
@@ -79,5 +79,5 @@ Phases execute in numeric order: 4 → 5 → 6
 | 2. Engine Property Tests | v1.0 | 1/1 | Complete | 2026-03-09 |
 | 3. Backgammon Example and Integration Properties | v1.0 | 2/2 | Complete | 2026-03-09 |
 | 4. DSL Scope and Semantic Contract | v1.1 | 2/2 | Complete | 2026-03-09 |
-| 5. Build-Time Compiler and Example Integration | v1.1 | 2/3 | In Progress | - |
+| 5. Build-Time Compiler and Example Integration | v1.1 | 3/3 | Complete | 2026-03-09 |
 | 6. Validation and Release Hardening | v1.1 | 0/2 | Pending | - |
