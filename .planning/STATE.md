@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: pest feature (PEG parser)
-status: Ready to Plan Phase 6
-stopped_at: Completed 05-03-PLAN.md
+status: Executing Phase 6
+stopped_at: Completed 06-01-PLAN.md
 last_updated: "2026-03-09T00:00:00.000Z"
-last_activity: 2026-03-09 — Completed 05-03-PLAN.md
+last_activity: 2026-03-09 — Completed 06-01-PLAN.md
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 7
-  completed_plans: 5
-  percent: 83
+  total_plans: 9
+  completed_plans: 6
+  percent: 89
 ---
 
 # Project State
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-09 after starting v1.1 milestone)
 
 **Core value:** The engine's determinism and undo/redo correctness must be provably sound — property-based tests using proptest make this machine-verifiable, not just manually checked.
-**Current focus:** v1.1 Pest Feature (PEG Parser) — ready to plan Phase 6
+**Current focus:** v1.1 Pest Feature (PEG Parser) — executing Phase 6
 
 ## Current Position
 
 Phase: 6
-Plan: -
-Status: Ready to Plan Phase 6
-Last activity: 2026-03-09 — Completed 05-03-PLAN.md
-Progress: [████████░░] 83%
+Plan: 06-02
+Status: Executing Phase 6
+Last activity: 2026-03-09 — Completed 06-01-PLAN.md
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
+- Total plans completed: 6
 - Average duration: -
 - Total execution time: 0 hours
 
@@ -44,9 +44,10 @@ Progress: [████████░░] 83%
 |-------|-------|-------|----------|
 | 4. DSL Scope and Semantic Contract | 2 | 2026-03-09 | 1.0 |
 | 5. Build-Time Compiler and Example Integration | 3 | 2026-03-09 | 1.0 |
+| 6. Validation and Release Hardening | 1 | 2026-03-09 | 1.0 |
 
 **Recent Trend:**
-- Last 5 plans: 04-01, 04-02, 05-01, 05-02, 05-03
+- Last 5 plans: 04-02, 05-01, 05-02, 05-03, 06-01
 - Trend: steady
 
 *Updated after each plan completion*
@@ -90,6 +91,9 @@ Recent decisions affecting current work:
 - [Phase 05-build-time-compiler-and-example-integration]: Runtime codegen emits a nested `generated_rules` module so included output has a stable namespace inside consumer crates
 - [Phase 05-build-time-compiler-and-example-integration]: Generated runtime code references consumer types from parent scope and uses fully qualified `herdingcats` paths to avoid `include!` import conflicts
 - [Phase 05-build-time-compiler-and-example-integration]: Integration proof uses a real nested Cargo consumer executed from tests rather than a mocked registration path
+- [Phase 06-validation-and-release-hardening]: Generated-op and generated-rule invariants are validated through the real nested consumer crate, not a separate mock harness
+- [Phase 06-validation-and-release-hardening]: `examples/dsl_consumer/build.rs` accepts `HERDINGCATS_DSL_RULES_PATH` so compile-fail diagnostics can exercise the real build pipeline with temporary authored DSL files
+- [Phase 06-validation-and-release-hardening]: The example consumer now exposes a reusable library surface plus thin demo binary so generated behavior can be tested directly without duplicating fixture types
 
 ### Roadmap Evolution
 
