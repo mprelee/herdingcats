@@ -137,6 +137,7 @@ rule "dup" {
     assert!(stderr.contains("validate authored rules"));
     assert!(stderr.contains(&rules_path.display().to_string()));
     assert!(stderr.contains("duplicate rule id: dup"));
+    assert!(stderr.contains("[rule: dup]"));
     assert!(stderr.contains("help:"));
-    assert!(stderr.contains("before()-only effects"));
+    assert!(stderr.contains("unique stable id"));
 }

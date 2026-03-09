@@ -25,8 +25,11 @@ pub fn parse_str(contents: &str) -> Result<RuleFileAst, Diagnostic> {
 
 pub fn load_source(path: impl AsRef<Path>) -> Result<SourceFile, Diagnostic> {
     let path = path.as_ref();
-    let contents = fs::read_to_string(path)
-        .map_err(|err| Diagnostic::io(format!("failed reading {}: {err}", path.display())))?;
+    let contents = fs::read_to_string(path).map_err(|err| {
+        Diagnostic::io(format!("failed reading {}: {err}", path.display()))
+            .with_source_path(path.display().to_string())
+            .with_help("ensure the authored DSL file exists and is readable during build.rs")
+    })?;
     Ok(SourceFile {
         path: Some(path.to_path_buf()),
         contents,
@@ -34,8 +37,13 @@ pub fn load_source(path: impl AsRef<Path>) -> Result<SourceFile, Diagnostic> {
 }
 
 pub fn load_and_parse(path: impl AsRef<Path>) -> Result<RuleFileAst, Diagnostic> {
+    let path = path.as_ref();
     let source = load_source(path)?;
-    parse_str(&source.contents)
+    parse_str(&source.contents).map_err(|diagnostic| {
+        diagnostic
+            .with_source_path(path.display().to_string())
+            .with_help("fix the DSL syntax so the file parses as a v1.1 build-time rule set")
+    })
 }
 
 pub fn lower_with_bindings(

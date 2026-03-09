@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::Write;
 
 use crate::bindings::BackendConfig;
@@ -139,7 +140,18 @@ pub fn generate_runtime_module(ir: &RuleSetIr, backend: &BackendConfig) -> Strin
             op = op_type
         )
         .unwrap();
-        writeln!(&mut out, "            if let {} {{ {} }} = event {{", event_variant_path(&event_type, &rule.event.variant), rule.event.bindings.join(", ")).unwrap();
+        writeln!(
+            &mut out,
+            "            match event {{"
+        )
+        .unwrap();
+        writeln!(
+            &mut out,
+            "                {} {{ {} }} => {{",
+            event_variant_path(&event_type, &rule.event.variant),
+            pattern_bindings(rule)
+        )
+        .unwrap();
         if !rule.guards.is_empty() {
             let guard_expr = rule
                 .guards
@@ -147,12 +159,14 @@ pub fn generate_runtime_module(ir: &RuleSetIr, backend: &BackendConfig) -> Strin
                 .map(|guard| guard.expression.clone())
                 .collect::<Vec<_>>()
                 .join(" && ");
-            writeln!(&mut out, "                if {} {{", guard_expr).unwrap();
+            writeln!(&mut out, "                    if {} {{", guard_expr).unwrap();
             emit_effects(&mut out, rule, backend);
-            writeln!(&mut out, "                }}").unwrap();
+            writeln!(&mut out, "                    }}").unwrap();
         } else {
             emit_effects(&mut out, rule, backend);
         }
+        writeln!(&mut out, "                }}").unwrap();
+        writeln!(&mut out, "                _ => {{}}").unwrap();
         writeln!(&mut out, "            }}").unwrap();
         writeln!(&mut out, "        }}").unwrap();
         writeln!(&mut out, "    }}").unwrap();
@@ -253,4 +267,39 @@ fn scoped_type_path(path: &str) -> String {
     } else {
         format!("super::{path}")
     }
+}
+
+fn pattern_bindings(rule: &crate::ir::RuleSpec) -> String {
+    let used = used_bindings(rule);
+    rule.event
+        .bindings
+        .iter()
+        .map(|binding| {
+            if used.contains(binding) {
+                binding.clone()
+            } else {
+                format!("{binding}: _")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn used_bindings(rule: &crate::ir::RuleSpec) -> HashSet<String> {
+    let mut used = HashSet::new();
+    for guard in &rule.guards {
+        for binding in &guard.bindings {
+            used.insert(binding.clone());
+        }
+    }
+    for effect in &rule.effects {
+        if let EffectSpec::Emit(emit) = effect {
+            for arg in &emit.args {
+                if let ValueSpec::Binding(binding) = &arg.value {
+                    used.insert(binding.clone());
+                }
+            }
+        }
+    }
+    used
 }

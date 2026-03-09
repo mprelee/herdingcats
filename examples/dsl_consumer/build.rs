@@ -3,7 +3,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use herdingcats_codegen::bindings::{BackendConfig, BindingConfig};
-use herdingcats_codegen::diagnostics::{Diagnostic, DiagnosticKind};
+use herdingcats_codegen::diagnostics::Diagnostic;
 use herdingcats_codegen::{generate_runtime_source, load_and_parse, lower_with_bindings, write_source};
 
 fn main() {
@@ -42,23 +42,6 @@ fn main() {
 fn unwrap_codegen_result<T>(stage: &str, rules_path: &Path, result: Result<T, Diagnostic>) -> T {
     match result {
         Ok(value) => value,
-        Err(err) => panic!(
-            "{stage} for {} failed: {err}\n{}",
-            rules_path.display(),
-            help_for_diagnostic(&err)
-        ),
-    }
-}
-
-#[allow(dead_code)]
-fn help_for_diagnostic(diagnostic: &Diagnostic) -> &'static str {
-    match diagnostic.kind {
-        DiagnosticKind::Parse => {
-            "help: fix the DSL syntax so the file parses as a v1.1 build-time rule set"
-        }
-        DiagnosticKind::Validation => {
-            "help: stay within the v1.1 contract: approved bindings/operations, before()-only effects, and unique rule ids"
-        }
-        DiagnosticKind::Io => "help: ensure the authored DSL file exists and is readable during build.rs",
+        Err(err) => panic!("{stage} for {} failed: {err}", rules_path.display()),
     }
 }

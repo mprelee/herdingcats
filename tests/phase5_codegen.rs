@@ -187,3 +187,30 @@ fn dsl_consumer_example_runs_end_to_end() {
     assert!(stdout.contains("home_points=7"));
     assert!(stdout.contains("log_count=1"));
 }
+
+#[test]
+fn handwritten_examples_remain_usable_without_dsl_setup() {
+    let examples = std::process::Command::new("cargo")
+        .args(["test", "--lib", "--examples"])
+        .output()
+        .expect("should test handwritten library and examples");
+    assert!(
+        examples.status.success(),
+        "cargo test --lib --examples failed: stdout={}\nstderr={}",
+        String::from_utf8_lossy(&examples.stdout),
+        String::from_utf8_lossy(&examples.stderr)
+    );
+
+    for example in ["tictactoe", "backgammon"] {
+        let output = std::process::Command::new("cargo")
+            .args(["run", "--quiet", "--example", example])
+            .output()
+            .expect("should run handwritten example");
+        assert!(
+            output.status.success(),
+            "cargo run --example {example} failed: stdout={}\nstderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}

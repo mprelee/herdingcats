@@ -12,6 +12,7 @@ pub struct DemoState {
 #[derive(Clone, Debug, PartialEq)]
 pub enum DemoEvent {
     TouchdownScored { team: String },
+    AuditTick,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -105,6 +106,7 @@ impl Rule<DemoState, DemoOp, DemoEvent, u8> for HandwrittenAuditRule {
     fn before(&self, _state: &DemoState, event: &mut DemoEvent, tx: &mut Transaction<DemoOp>) {
         match event {
             DemoEvent::TouchdownScored { .. } => tx.ops.push(DemoOp::HandwrittenLog),
+            DemoEvent::AuditTick => {}
         }
     }
 }
