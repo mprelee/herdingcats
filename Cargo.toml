@@ -1,6 +1,6 @@
 [package]
 name = "herdingcats"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Deterministic rule orchestration for ambiguity-free turn-based games."
@@ -11,3 +11,6 @@ keywords = ["game", "deterministic", "rules", "engine", "turn-based"]
 categories = ["game-development"]
 
 [dependencies]
+
+[dev-dependencies]
+proptest = "1.10"
