@@ -1,5 +1,6 @@
 use std::fmt::Write;
 
+use crate::bindings::BackendConfig;
 use crate::ir::{EffectSpec, RuleSetIr, ValueSpec};
 
 pub fn generate_module(ir: &RuleSetIr) -> String {
@@ -73,5 +74,183 @@ fn rust_type_for_value(value: &ValueSpec) -> &'static str {
         ValueSpec::Binding(_) | ValueSpec::String(_) => "String",
         ValueSpec::Integer(_) => "i64",
         ValueSpec::Boolean(_) => "bool",
+    }
+}
+
+pub fn generate_runtime_module(ir: &RuleSetIr, backend: &BackendConfig) -> String {
+    let mut out = String::new();
+    let state_type = scoped_type_path(&backend.state_type);
+    let event_type = scoped_type_path(&backend.event_type);
+    let op_type = scoped_type_path(&backend.op_type);
+
+    writeln!(&mut out, "// @generated runtime module by herdingcats_codegen").unwrap();
+    writeln!(&mut out, "#[allow(dead_code)]").unwrap();
+    writeln!(&mut out, "pub mod generated_rules {{").unwrap();
+    writeln!(&mut out, "    #[derive(Clone, Debug, PartialEq)]").unwrap();
+    writeln!(&mut out, "    pub enum GeneratedOp {{").unwrap();
+    for rule in &ir.rules {
+        for effect in &rule.effects {
+            if let EffectSpec::Emit(emit) = effect {
+                write!(&mut out, "        {} {{", emit.operation).unwrap();
+                for (idx, arg) in emit.args.iter().enumerate() {
+                    if idx > 0 {
+                        write!(&mut out, ", ").unwrap();
+                    }
+                    write!(&mut out, "{}: {}", arg.name, rust_type_for_value(&arg.value)).unwrap();
+                }
+                writeln!(&mut out, " }},").unwrap();
+            }
+        }
+    }
+    writeln!(&mut out, "    }}").unwrap();
+    writeln!(&mut out).unwrap();
+
+    for rule in &ir.rules {
+        let struct_name = sanitize_rule_name(&rule.id);
+        writeln!(&mut out, "    pub struct {};", struct_name).unwrap();
+        writeln!(
+            &mut out,
+            "    impl herdingcats::Rule<{state}, {op}, {event}, {priority}> for {name} {{",
+            state = state_type,
+            op = op_type,
+            event = event_type,
+            priority = backend.priority_type,
+            name = struct_name
+        )
+        .unwrap();
+        writeln!(
+            &mut out,
+            "        fn id(&self) -> &'static str {{ {:?} }}",
+            rule.id
+        )
+        .unwrap();
+        writeln!(
+            &mut out,
+            "        fn priority(&self) -> {priority} {{ {priority}::from({value}u8) }}",
+            priority = backend.priority_type,
+            value = rule.priority.min(u8::MAX as u32)
+        )
+        .unwrap();
+        writeln!(
+            &mut out,
+            "        fn before(&self, state: &{state}, event: &mut {event}, tx: &mut herdingcats::Transaction<{op}>) {{",
+            state = state_type,
+            event = event_type,
+            op = op_type
+        )
+        .unwrap();
+        writeln!(&mut out, "            if let {} {{ {} }} = event {{", event_variant_path(&event_type, &rule.event.variant), rule.event.bindings.join(", ")).unwrap();
+        if !rule.guards.is_empty() {
+            let guard_expr = rule
+                .guards
+                .iter()
+                .map(|guard| guard.expression.clone())
+                .collect::<Vec<_>>()
+                .join(" && ");
+            writeln!(&mut out, "                if {} {{", guard_expr).unwrap();
+            emit_effects(&mut out, rule, backend);
+            writeln!(&mut out, "                }}").unwrap();
+        } else {
+            emit_effects(&mut out, rule, backend);
+        }
+        writeln!(&mut out, "            }}").unwrap();
+        writeln!(&mut out, "        }}").unwrap();
+        writeln!(&mut out, "    }}").unwrap();
+        writeln!(&mut out).unwrap();
+    }
+
+    writeln!(
+        &mut out,
+        "    pub fn register_generated_rules(engine: &mut herdingcats::Engine<{state}, {op}, {event}, {priority}>) {{",
+        state = state_type,
+        op = op_type,
+        event = event_type,
+        priority = backend.priority_type
+    )
+    .unwrap();
+    for rule in &ir.rules {
+        writeln!(
+            &mut out,
+            "        engine.add_rule({}, {});",
+            sanitize_rule_name(&rule.id),
+            lifetime_expr(rule)
+        )
+        .unwrap();
+    }
+    writeln!(&mut out, "    }}").unwrap();
+    writeln!(&mut out, "}}").unwrap();
+
+    out
+}
+
+fn emit_effects(out: &mut String, rule: &crate::ir::RuleSpec, backend: &BackendConfig) {
+    for effect in &rule.effects {
+        match effect {
+            EffectSpec::Emit(emit) => {
+                write!(
+                    out,
+                    "                    tx.ops.push({op}::{variant}(GeneratedOp::{name} {{",
+                    op = scoped_type_path(&backend.op_type),
+                    variant = backend.generated_variant,
+                    name = emit.operation
+                )
+                .unwrap();
+                for (idx, arg) in emit.args.iter().enumerate() {
+                    if idx > 0 {
+                        write!(out, ", ").unwrap();
+                    }
+                    write!(out, "{}: {}", arg.name, rust_value(&arg.value)).unwrap();
+                }
+                writeln!(out, " }}));").unwrap();
+            }
+            EffectSpec::Cancel => {
+                writeln!(out, "                    tx.cancelled = true;").unwrap();
+            }
+            EffectSpec::SetDeterministicFalse => {
+                writeln!(out, "                    tx.deterministic = false;").unwrap();
+            }
+            EffectSpec::SetIrreversibleFalse => {
+                writeln!(out, "                    tx.irreversible = false;").unwrap();
+            }
+        }
+    }
+}
+
+fn rust_value(value: &ValueSpec) -> String {
+    match value {
+        ValueSpec::Binding(binding) => format!("{binding}.to_string()"),
+        ValueSpec::Integer(value) => value.to_string(),
+        ValueSpec::String(value) => format!("{value:?}.to_string()"),
+        ValueSpec::Boolean(value) => value.to_string(),
+    }
+}
+
+fn sanitize_rule_name(id: &str) -> String {
+    let mut name = String::from("GeneratedRule");
+    for ch in id.chars() {
+        if ch.is_ascii_alphanumeric() {
+            name.push(ch.to_ascii_uppercase());
+        }
+    }
+    name
+}
+
+fn event_variant_path(event_type: &str, variant: &str) -> String {
+    format!("{event_type}::{variant}")
+}
+
+fn lifetime_expr(rule: &crate::ir::RuleSpec) -> String {
+    match rule.lifetime {
+        crate::ir::LifetimeSpec::Permanent => String::from("herdingcats::RuleLifetime::Permanent"),
+        crate::ir::LifetimeSpec::Turns(n) => format!("herdingcats::RuleLifetime::Turns({n})"),
+        crate::ir::LifetimeSpec::Triggers(n) => format!("herdingcats::RuleLifetime::Triggers({n})"),
+    }
+}
+
+fn scoped_type_path(path: &str) -> String {
+    if path.contains("::") {
+        path.to_string()
+    } else {
+        format!("super::{path}")
     }
 }

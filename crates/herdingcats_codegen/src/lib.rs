@@ -11,7 +11,7 @@ use std::fs;
 use std::path::Path;
 
 use ast::{RuleFileAst, SourceFile};
-use bindings::BindingConfig;
+use bindings::{BackendConfig, BindingConfig};
 use codegen::generate_module;
 use diagnostics::Diagnostic;
 use ir::RuleSetIr;
@@ -47,6 +47,10 @@ pub fn lower_with_bindings(
 
 pub fn generate_source(ir: &RuleSetIr) -> String {
     generate_module(ir)
+}
+
+pub fn generate_runtime_source(ir: &RuleSetIr, backend: &BackendConfig) -> String {
+    codegen::generate_runtime_module(ir, backend)
 }
 
 pub fn write_source(

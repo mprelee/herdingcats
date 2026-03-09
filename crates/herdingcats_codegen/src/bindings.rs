@@ -32,3 +32,29 @@ impl Default for BindingConfig {
         Self::new()
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BackendConfig {
+    pub state_type: String,
+    pub event_type: String,
+    pub op_type: String,
+    pub priority_type: String,
+    pub generated_variant: String,
+}
+
+impl BackendConfig {
+    pub fn new(
+        state_type: impl Into<String>,
+        event_type: impl Into<String>,
+        op_type: impl Into<String>,
+        priority_type: impl Into<String>,
+    ) -> Self {
+        Self {
+            state_type: state_type.into(),
+            event_type: event_type.into(),
+            op_type: op_type.into(),
+            priority_type: priority_type.into(),
+            generated_variant: String::from("Generated"),
+        }
+    }
+}

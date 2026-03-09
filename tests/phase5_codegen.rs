@@ -1,8 +1,10 @@
 use std::collections::HashSet;
 
-use herdingcats_codegen::bindings::BindingConfig;
+use herdingcats_codegen::bindings::{BackendConfig, BindingConfig};
 use herdingcats_codegen::ir::{EffectSpec, LifetimeSpec, ValueSpec};
-use herdingcats_codegen::{generate_source, lower_with_bindings, parse_str, write_source};
+use herdingcats_codegen::{
+    generate_runtime_source, generate_source, lower_with_bindings, parse_str, write_source,
+};
 
 fn base_bindings() -> BindingConfig {
     BindingConfig {
@@ -135,4 +137,53 @@ fn write_source_writes_generated_module() {
     assert_eq!(contents, "// generated");
     std::fs::remove_file(&path).ok();
     std::fs::remove_dir(&dir).ok();
+}
+
+#[test]
+fn runtime_source_contains_rule_impls_and_registration() {
+    let src = r#"
+rule "scoring.touchdown_bonus" {
+  priority 10
+  lifetime permanent
+  on TouchdownScored(team)
+  when state.scoring_mode == "touchdown_plus_one"
+  before {
+    emit AwardPoints(team: team, points: 1)
+  }
+}
+"#;
+
+    let ast = parse_str(src).expect("should parse");
+    let ir = lower_with_bindings(&ast, &base_bindings()).expect("should lower");
+    let backend = BackendConfig::new("DemoState", "DemoEvent", "DemoOp", "u8");
+    let generated = generate_runtime_source(&ir, &backend);
+
+    assert!(generated.contains("pub mod generated_rules"));
+    assert!(generated.contains("impl herdingcats::Rule<super::DemoState, super::DemoOp, super::DemoEvent, u8>"));
+    assert!(generated.contains("register_generated_rules"));
+    assert!(generated.contains("super::DemoOp::Generated"));
+}
+
+#[test]
+fn dsl_consumer_example_runs_end_to_end() {
+    let output = std::process::Command::new("cargo")
+        .args([
+            "run",
+            "--quiet",
+            "--manifest-path",
+            "examples/dsl_consumer/Cargo.toml",
+        ])
+        .output()
+        .expect("should run nested consumer crate");
+
+    assert!(
+        output.status.success(),
+        "consumer crate failed: stdout={}\nstderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("home_points=7"));
+    assert!(stdout.contains("log_count=1"));
 }
