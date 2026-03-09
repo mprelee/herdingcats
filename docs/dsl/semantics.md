@@ -9,7 +9,7 @@ Each authored rule becomes generated Rust that fits the current `Rule` model:
 - authored `rule id` -> `Rule::id()`
 - authored `priority` -> `Rule::priority()`
 - authored `lifetime` -> `RuleLifetime`
-- authored `when` + `guard` -> logic inside `before()`
+- authored `on` + `when` -> logic inside `before()`
 - authored `emit` -> pushes operations into `Transaction::ops`
 - authored `cancel` -> sets `tx.cancelled = true`
 - authored transaction flags -> update approved `Transaction` fields in `before()`
@@ -55,8 +55,8 @@ Phase 6 will verify `hash_bytes()` behavior in generated code, but Phase 4 still
 Authored lifetimes map directly onto existing engine semantics:
 
 - `permanent` -> `RuleLifetime::Permanent`
-- `turns(n)` -> `RuleLifetime::Turns(n)`
-- `triggers(n)` -> `RuleLifetime::Triggers(n)`
+- `turns n` -> `RuleLifetime::Turns(n)`
+- `triggers n` -> `RuleLifetime::Triggers(n)`
 
 The DSL does not invent new lifecycle behavior in v1.1.
 

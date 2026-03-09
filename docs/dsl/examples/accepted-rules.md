@@ -5,12 +5,15 @@ These examples are intentionally narrow. They demonstrate what Phase 4 considers
 ## Example 1: Scoring Override Toggle
 
 ```text
-rule field_goal_bonus {
+rule "field_goal_bonus" {
   priority 10
   lifetime permanent
-  when ScoreEvent.kind == "field_goal"
-  guard state.rules.field_goal_bonus_enabled == true
-  emit SetFieldGoalPoints(value = 4, prior = state.rules.field_goal_points)
+  on ScoreEvent(kind)
+  when kind == "field_goal"
+  when state.rules.field_goal_bonus_enabled == true
+  before {
+    emit SetFieldGoalPoints(value: 4, prior: state.rules.field_goal_points)
+  }
 }
 ```
 
@@ -29,11 +32,13 @@ Engine mapping:
 ## Example 2: Lifetime-Limited Modifier
 
 ```text
-rule overtime_bonus_window {
+rule "overtime_bonus_window" {
   priority 20
-  lifetime turns(2)
-  when OvertimeStarted
-  emit EnableBonusRule(name = "four_point_field_goal")
+  lifetime turns 2
+  on OvertimeStarted
+  before {
+    emit EnableBonusRule(name: "four_point_field_goal")
+  }
 }
 ```
 
@@ -49,12 +54,15 @@ Engine mapping:
 ## Example 3: Guarded Cancellation Rule
 
 ```text
-rule disallow_bonus_without_toggle {
+rule "disallow_bonus_without_toggle" {
   priority 5
   lifetime permanent
-  when ScoreEvent.kind == "field_goal"
-  guard state.rules.field_goal_bonus_enabled == false
-  cancel
+  on ScoreEvent(kind)
+  when kind == "field_goal"
+  when state.rules.field_goal_bonus_enabled == false
+  before {
+    cancel
+  }
 }
 ```
 
@@ -70,12 +78,15 @@ Engine mapping:
 ## Example 4: Deterministic Flag Override
 
 ```text
-rule cosmetic_banner_rule {
+rule "cosmetic_banner_rule" {
   priority 200
-  lifetime triggers(1)
-  when SeasonEvent.kind == "launch_banner"
-  set deterministic = false
-  emit ShowBannerEffect(message = "Playoff rules active")
+  lifetime triggers 1
+  on SeasonEvent(kind)
+  when kind == "launch_banner"
+  before {
+    set tx.deterministic = false
+    emit ShowBannerEffect(message: "Playoff rules active")
+  }
 }
 ```
 

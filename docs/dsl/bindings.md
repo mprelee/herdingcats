@@ -12,6 +12,7 @@ Instead, the consumer exposes a narrow binding surface the compiler is allowed t
 
 The consumer may expose:
 - named state fields
+- explicitly approved dotted state paths such as `state.rules.field_goal_bonus_enabled`
 - named read-only helper values
 - named read-only helper predicates
 
@@ -30,6 +31,7 @@ The consumer may expose:
 V1 recommendation:
 - support variant matching by default
 - allow field extraction only when the consumer declares it explicitly
+- apply the same rule to state traversal: dotted state paths are valid only when the consumer exposes that exact path or a named alias
 
 ## Operation Bindings
 

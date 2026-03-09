@@ -71,4 +71,14 @@ cargo test
 
 ## Deviations
 
-No content deviations from Plan 04-01.
+### Auto-fixed during phase verification
+
+- Normalized accepted examples to match the locked DSL contract exactly:
+  - quoted rule ids
+  - explicit `on ...` event matches
+  - `when ...` guards instead of ad hoc `guard` lines
+  - required `before { ... }` block
+  - `turns 2` / `triggers 1` lifetime syntax
+  - `set tx.deterministic = false` transaction flag syntax
+
+This was a consistency fix across Phase 4 artifacts, not a scope change.
