@@ -58,7 +58,11 @@ Plans:
   3. `RollDice` and `Move` produce separate `CommitFrame` entries so `engine.undo()` can reverse a single die's move without reversing the dice roll
   4. Property test confirms total checker count across all points + bars + home counters is invariant across any sequence of valid moves
   5. Property test confirms `engine.undo()` after a single `Move` dispatch fully restores both `state` and `replay_hash` to pre-move values
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Data model: BgState, BackgammonOp, Operation impl, checker_count, unit tests for all four op variants
+- [ ] 03-02-PLAN.md — Engine wiring: Display, Events, Rules, main() narrative, BACK-05 and BACK-06 proptest property tests
 
 ## Progress
 
@@ -69,4 +73,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Module Split and Foundation | 3/3 | Complete   | 2026-03-09 |
 | 2. Engine Property Tests | 1/1 | Complete   | 2026-03-09 |
-| 3. Backgammon Example and Integration Properties | 0/TBD | Not started | - |
+| 3. Backgammon Example and Integration Properties | 0/2 | Not started | - |
