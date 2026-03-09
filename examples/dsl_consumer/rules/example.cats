@@ -7,3 +7,13 @@ rule "scoring.touchdown_bonus" {
     emit AwardPoints(team: team, points: 1)
   }
 }
+
+rule "scoring.cancel_touchdown" {
+  priority 0
+  lifetime permanent
+  on TouchdownScored(team)
+  when state.scoring_mode == "cancel_touchdown"
+  before {
+    cancel
+  }
+}
