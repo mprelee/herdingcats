@@ -1,0 +1,103 @@
+// Phase 4 grammar scope skeleton for the herdingcats DSL.
+// This is intentionally narrow and documents the syntax surface that Phase 5
+// should implement. It is a contract artifact, not yet a full parser.
+
+WHITESPACE = _{ " " | "\t" | NEWLINE }
+COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
+
+file = { SOI ~ rule_block* ~ EOI }
+
+rule_block = {
+  "rule" ~ string ~ "{" ~
+    rule_item* ~
+  "}"
+}
+
+rule_item = _{
+    priority_decl
+  | lifetime_decl
+  | event_decl
+  | guard_decl
+  | before_block
+}
+
+priority_decl = { "priority" ~ integer }
+
+lifetime_decl = {
+  "lifetime" ~ (
+      "permanent"
+    | "turns" ~ integer
+    | "triggers" ~ integer
+  )
+}
+
+event_decl = { "on" ~ event_pattern }
+
+event_pattern = {
+  ident ~ ("(" ~ ident_list? ~ ")")?
+}
+
+guard_decl = { "when" ~ guard_expr }
+
+before_block = {
+  "before" ~ "{" ~ effect_stmt* ~ "}"
+}
+
+effect_stmt = _{
+    emit_stmt
+  | cancel_stmt
+  | tx_flag_stmt
+}
+
+emit_stmt = {
+  "emit" ~ ident ~ "(" ~ named_arg_list? ~ ")"
+}
+
+cancel_stmt = { "cancel" }
+
+tx_flag_stmt = {
+  "set" ~ "tx" ~ "." ~ ("irreversible" | "deterministic") ~ "=" ~ "false"
+}
+
+guard_expr = { guard_term ~ (guard_op ~ guard_term)* }
+guard_op = _{ "&&" }
+
+guard_term = _{
+    negated_binding
+  | comparison
+  | binding
+  | literal
+}
+
+negated_binding = { "!" ~ binding }
+
+comparison = {
+  binding ~ compare_op ~ literal
+}
+
+compare_op = _{ "==" | "!=" | ">=" | "<=" | ">" | "<" }
+
+binding = {
+  binding_root ~ ("." ~ ident)*
+}
+
+binding_root = _{ "state" | ident }
+
+named_arg_list = { named_arg ~ ("," ~ named_arg)* }
+named_arg = { ident ~ ":" ~ value }
+
+value = _{ binding | literal }
+literal = _{ integer | string | boolean }
+boolean = { "true" | "false" }
+
+ident_list = { ident ~ ("," ~ ident)* }
+ident = @{ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+integer = @{ ASCII_DIGIT+ }
+string = @{ "\"" ~ ("\\\"" | !("\"") ~ ANY)* ~ "\"" }
+
+// Intentionally absent from scope:
+// - after_block
+// - direct state assignment
+// - arbitrary expressions
+// - loops or iteration
+// - runtime scripting constructs
