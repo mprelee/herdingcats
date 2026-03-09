@@ -228,3 +228,142 @@ where
         self.replay_hash = FNV_OFFSET;
     }
 }
+
+// ============================================================
+// Tests
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::transaction::{RuleLifetime, Transaction};
+
+    // --------------------------------------------------------
+    // CounterOp fixture
+    // --------------------------------------------------------
+
+    #[derive(Clone, Debug, PartialEq)]
+    enum CounterOp {
+        Inc,
+        Dec,
+        Reset { prior: i32 },
+    }
+
+    impl Operation<i32> for CounterOp {
+        fn apply(&self, state: &mut i32) {
+            match self {
+                CounterOp::Inc => *state += 1,
+                CounterOp::Dec => *state -= 1,
+                CounterOp::Reset { .. } => *state = 0,
+            }
+        }
+        fn undo(&self, state: &mut i32) {
+            match self {
+                CounterOp::Inc => *state -= 1,
+                CounterOp::Dec => *state += 1,
+                CounterOp::Reset { prior } => *state = *prior,
+            }
+        }
+        fn hash_bytes(&self) -> Vec<u8> {
+            match self {
+                CounterOp::Inc => vec![0],
+                CounterOp::Dec => vec![1],
+                CounterOp::Reset { prior } => {
+                    let mut v = vec![2];
+                    v.extend_from_slice(&prior.to_le_bytes());
+                    v
+                }
+            }
+        }
+    }
+
+    struct NoRule;
+    impl Rule<i32, CounterOp, (), u8> for NoRule {
+        fn id(&self) -> &'static str {
+            "no_rule"
+        }
+        fn priority(&self) -> u8 {
+            0
+        }
+    }
+
+    // --------------------------------------------------------
+    // apply+undo roundtrip tests (TEST-03)
+    // --------------------------------------------------------
+
+    #[test]
+    fn apply_undo_inc() {
+        let mut state = 0i32;
+        CounterOp::Inc.apply(&mut state);
+        assert_eq!(state, 1);
+        CounterOp::Inc.undo(&mut state);
+        assert_eq!(state, 0);
+    }
+
+    #[test]
+    fn apply_undo_dec() {
+        let mut state = 0i32;
+        CounterOp::Dec.apply(&mut state);
+        assert_eq!(state, -1);
+        CounterOp::Dec.undo(&mut state);
+        assert_eq!(state, 0);
+    }
+
+    #[test]
+    fn apply_undo_reset() {
+        let mut state = 5i32;
+        let op = CounterOp::Reset { prior: 5 };
+        op.apply(&mut state);
+        assert_eq!(state, 0);
+        op.undo(&mut state);
+        assert_eq!(state, 5);
+    }
+
+    // --------------------------------------------------------
+    // hash_bytes determinism and non-empty (TEST-04)
+    // --------------------------------------------------------
+
+    #[test]
+    fn hash_bytes_nonempty() {
+        assert!(!CounterOp::Inc.hash_bytes().is_empty());
+        assert!(!CounterOp::Dec.hash_bytes().is_empty());
+        assert!(!CounterOp::Reset { prior: 0 }.hash_bytes().is_empty());
+    }
+
+    #[test]
+    fn hash_bytes_determinism() {
+        assert_eq!(CounterOp::Inc.hash_bytes(), CounterOp::Inc.hash_bytes());
+        assert_eq!(CounterOp::Dec.hash_bytes(), CounterOp::Dec.hash_bytes());
+        assert_eq!(
+            CounterOp::Reset { prior: 7 }.hash_bytes(),
+            CounterOp::Reset { prior: 7 }.hash_bytes()
+        );
+    }
+
+    #[test]
+    fn hash_bytes_variant_uniqueness() {
+        assert_ne!(CounterOp::Inc.hash_bytes(), CounterOp::Dec.hash_bytes());
+        assert_ne!(
+            CounterOp::Inc.hash_bytes(),
+            CounterOp::Reset { prior: 0 }.hash_bytes()
+        );
+    }
+
+    // --------------------------------------------------------
+    // Engine integration smoke test
+    // --------------------------------------------------------
+
+    #[test]
+    fn engine_dispatch_undo() {
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_rule(NoRule, RuleLifetime::Permanent);
+
+        let mut tx = Transaction::new();
+        tx.ops.push(CounterOp::Inc);
+        engine.dispatch((), tx);
+        assert_eq!(engine.read(), 1);
+
+        engine.undo();
+        assert_eq!(engine.read(), 0);
+    }
+}
