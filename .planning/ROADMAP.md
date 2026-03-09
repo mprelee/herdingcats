@@ -12,7 +12,7 @@ The library's single `src/lib.rs` is split into five concept-focused modules (Ph
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Module Split and Foundation** - Split lib.rs into five modules, add proptest dev-dep, inline unit tests in every module, and add rustdoc to all public items
+- [x] **Phase 1: Module Split and Foundation** - Split lib.rs into five modules, add proptest dev-dep, inline unit tests in every module, and add rustdoc to all public items (completed 2026-03-09)
 - [ ] **Phase 2: Engine Property Tests** - Machine-verify the engine's core correctness guarantees — undo/redo roundtrips, hash determinism, preview isolation, rule lifetime lifecycle, and cancelled transaction invariant — using proptest against simple concrete types
 - [ ] **Phase 3: Backgammon Example and Integration Properties** - Build examples/backgammon.rs as a runnable demo and proptest harness, verifying board conservation and per-die undo correctness
 
@@ -64,6 +64,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Module Split and Foundation | 2/3 | In Progress|  |
+| 1. Module Split and Foundation | 3/3 | Complete   | 2026-03-09 |
 | 2. Engine Property Tests | 0/TBD | Not started | - |
 | 3. Backgammon Example and Integration Properties | 0/TBD | Not started | - |

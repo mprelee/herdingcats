@@ -36,10 +36,10 @@
 
 ### Documentation
 
-- [ ] **DOC-01**: Every public type, trait, and method has a `///` rustdoc comment explaining its role in the paradigm — not just what it does but *why it exists* and *how it fits the engine model*
-- [ ] **DOC-02**: Key internal structs (`CommitFrame`) and the FNV hash function have `//` or `///` comments explaining their role even though they are not public
-- [ ] **DOC-03**: Every public method has a `/// # Examples` block with a runnable code example demonstrating its use in context
-- [ ] **DOC-04**: Trait definitions (`Operation`, `Rule`) include paradigm-teaching prose: what the abstraction represents, the contract it enforces, and how implementors should think about it
+- [x] **DOC-01**: Every public type, trait, and method has a `///` rustdoc comment explaining its role in the paradigm — not just what it does but *why it exists* and *how it fits the engine model*
+- [x] **DOC-02**: Key internal structs (`CommitFrame`) and the FNV hash function have `//` or `///` comments explaining their role even though they are not public
+- [x] **DOC-03**: Every public method has a `/// # Examples` block with a runnable code example demonstrating its use in context
+- [x] **DOC-04**: Trait definitions (`Operation`, `Rule`) include paradigm-teaching prose: what the abstraction represents, the contract it enforces, and how implementors should think about it
 
 ## v2 Requirements
 
@@ -75,10 +75,10 @@
 | TEST-02 | Phase 1 | Complete |
 | TEST-03 | Phase 1 | Complete |
 | TEST-04 | Phase 1 | Complete |
-| DOC-01 | Phase 1 | Pending |
-| DOC-02 | Phase 1 | Pending |
-| DOC-03 | Phase 1 | Pending |
-| DOC-04 | Phase 1 | Pending |
+| DOC-01 | Phase 1 | Complete |
+| DOC-02 | Phase 1 | Complete |
+| DOC-03 | Phase 1 | Complete |
+| DOC-04 | Phase 1 | Complete |
 | PROP-01 | Phase 2 | Pending |
 | PROP-02 | Phase 2 | Pending |
 | PROP-03 | Phase 2 | Pending |
