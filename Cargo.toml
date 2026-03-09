@@ -1,3 +1,7 @@
+[workspace]
+members = ["crates/herdingcats_codegen"]
+resolver = "2"
+
 [package]
 name = "herdingcats"
 version = "0.2.1"
@@ -13,4 +17,5 @@ categories = ["game-development"]
 [dependencies]
 
 [dev-dependencies]
+herdingcats_codegen = { path = "crates/herdingcats_codegen" }
 proptest = "1.10"
