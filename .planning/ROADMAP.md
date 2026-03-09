@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Module Split and Foundation** - Split lib.rs into five modules, add proptest dev-dep, inline unit tests in every module, and add rustdoc to all public items (completed 2026-03-09)
 - [x] **Phase 2: Engine Property Tests** - Machine-verify the engine's core correctness guarantees — undo/redo roundtrips, hash determinism, preview isolation, rule lifetime lifecycle, and cancelled transaction invariant — using proptest against simple concrete types (completed 2026-03-09)
-- [ ] **Phase 3: Backgammon Example and Integration Properties** - Build examples/backgammon.rs as a runnable demo and proptest harness, verifying board conservation and per-die undo correctness
+- [x] **Phase 3: Backgammon Example and Integration Properties** - Build examples/backgammon.rs as a runnable demo and proptest harness, verifying board conservation and per-die undo correctness (completed 2026-03-09)
 
 ## Phase Details
 
@@ -73,4 +73,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Module Split and Foundation | 3/3 | Complete   | 2026-03-09 |
 | 2. Engine Property Tests | 1/1 | Complete   | 2026-03-09 |
-| 3. Backgammon Example and Integration Properties | 1/2 | In Progress|  |
+| 3. Backgammon Example and Integration Properties | 2/2 | Complete   | 2026-03-09 |

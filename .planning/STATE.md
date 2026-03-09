@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Completed 03-backgammon-example-and-integration-properties-03-01-PLAN.md
-last_updated: "2026-03-09T06:34:37.118Z"
+stopped_at: Completed 03-backgammon-example-and-integration-properties-03-02-PLAN.md
+last_updated: "2026-03-09T06:39:12.237Z"
 last_activity: 2026-03-08 — Roadmap created; phases derived from requirements
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-module-split-and-foundation P03 | 12 | 2 tasks | 5 files |
 | Phase 02-engine-property-tests P01 | 8 | 2 tasks | 1 files |
 | Phase 03-backgammon-example-and-integration-properties P01 | 3 | 1 tasks | 1 files |
+| Phase 03-backgammon-example-and-integration-properties P02 | 3 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -81,6 +82,9 @@ Recent decisions affecting current work:
 - [Phase 03-backgammon-example-and-integration-properties]: Backgammon op variants carry player_sign: i8 field for uniform arithmetic instead of Player enum
 - [Phase 03-backgammon-example-and-integration-properties]: Isolated op unit tests use minimal BgState (not BgState::new()) to avoid 30-checker invariant collision
 - [Phase 03-backgammon-example-and-integration-properties]: Phase 3 BACK-02 bearing-off risk resolved: [i8;26] encoding with BearOffOp writing home counters (not board[26]) verified correct via roundtrip tests
+- [Phase 03-backgammon-example-and-integration-properties]: RollDiceRule.before() sets tx.irreversible=false (not main()) — rules own behavioral semantics
+- [Phase 03-backgammon-example-and-integration-properties]: prop_board_conservation uses apply+undo pairs at op level — tests conservation independently of game state validity
+- [Phase 03-backgammon-example-and-integration-properties]: BackgammonOp derives Debug — required by proptest Strategy::prop_map bound
 
 ### Pending Todos
 
@@ -92,6 +96,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T06:34:37.117Z
-Stopped at: Completed 03-backgammon-example-and-integration-properties-03-01-PLAN.md
+Last session: 2026-03-09T06:39:12.235Z
+Stopped at: Completed 03-backgammon-example-and-integration-properties-03-02-PLAN.md
 Resume file: None
