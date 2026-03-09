@@ -66,7 +66,7 @@ Plans:
 
 Plans:
 - [x] 06-01-PLAN.md — Validation suite: equivalence tests, property tests, and deterministic codegen assertions
-- [ ] 06-02-PLAN.md — Release hardening: diagnostics polish, compatibility checks, docs/examples update, and final API-boundary review
+- [x] 06-02-PLAN.md — Release hardening: diagnostics polish, compatibility checks, docs/examples update, and final API-boundary review
 
 ## Progress
 
@@ -80,4 +80,4 @@ Phases execute in numeric order: 4 → 5 → 6
 | 3. Backgammon Example and Integration Properties | v1.0 | 2/2 | Complete | 2026-03-09 |
 | 4. DSL Scope and Semantic Contract | v1.1 | 2/2 | Complete | 2026-03-09 |
 | 5. Build-Time Compiler and Example Integration | v1.1 | 3/3 | Complete | 2026-03-09 |
-| 6. Validation and Release Hardening | v1.1 | 1/2 | In Progress | - |
+| 6. Validation and Release Hardening | v1.1 | 2/2 | Complete | 2026-03-09 |

@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: pest feature (PEG parser)
-status: Executing Phase 6
-stopped_at: Completed 06-01-PLAN.md
+status: Ready to Complete Milestone v1.1
+stopped_at: Completed 06-02-PLAN.md
 last_updated: "2026-03-09T00:00:00.000Z"
-last_activity: 2026-03-09 — Completed 06-01-PLAN.md
+last_activity: 2026-03-09 — Completed 06-02-PLAN.md
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 9
-  completed_plans: 6
-  percent: 89
+  completed_phases: 3
+  total_plans: 7
+  completed_plans: 7
+  percent: 100
 ---
 
 # Project State
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-09 after starting v1.1 milestone)
 
 **Core value:** The engine's determinism and undo/redo correctness must be provably sound — property-based tests using proptest make this machine-verifiable, not just manually checked.
-**Current focus:** v1.1 Pest Feature (PEG Parser) — executing Phase 6
+**Current focus:** v1.1 Pest Feature (PEG Parser) — ready to complete the milestone
 
 ## Current Position
 
 Phase: 6
-Plan: 06-02
-Status: Executing Phase 6
-Last activity: 2026-03-09 — Completed 06-01-PLAN.md
-Progress: [█████████░] 89%
+Plan: -
+Status: Ready to Complete Milestone v1.1
+Last activity: 2026-03-09 — Completed 06-02-PLAN.md
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 7
 - Average duration: -
 - Total execution time: 0 hours
 
@@ -44,10 +44,10 @@ Progress: [█████████░] 89%
 |-------|-------|-------|----------|
 | 4. DSL Scope and Semantic Contract | 2 | 2026-03-09 | 1.0 |
 | 5. Build-Time Compiler and Example Integration | 3 | 2026-03-09 | 1.0 |
-| 6. Validation and Release Hardening | 1 | 2026-03-09 | 1.0 |
+| 6. Validation and Release Hardening | 2 | 2026-03-09 | 1.0 |
 
 **Recent Trend:**
-- Last 5 plans: 04-02, 05-01, 05-02, 05-03, 06-01
+- Last 5 plans: 05-01, 05-02, 05-03, 06-01, 06-02
 - Trend: steady
 
 *Updated after each plan completion*
@@ -94,6 +94,9 @@ Recent decisions affecting current work:
 - [Phase 06-validation-and-release-hardening]: Generated-op and generated-rule invariants are validated through the real nested consumer crate, not a separate mock harness
 - [Phase 06-validation-and-release-hardening]: `examples/dsl_consumer/build.rs` accepts `HERDINGCATS_DSL_RULES_PATH` so compile-fail diagnostics can exercise the real build pipeline with temporary authored DSL files
 - [Phase 06-validation-and-release-hardening]: The example consumer now exposes a reusable library surface plus thin demo binary so generated behavior can be tested directly without duplicating fixture types
+- [Phase 06-validation-and-release-hardening]: Diagnostics now carry optional source path, rule id, and help text so build failures stay assertable and user-facing
+- [Phase 06-validation-and-release-hardening]: Handwritten-only compatibility is enforced by automated `cargo test --lib --examples` and example runs, not left implicit
+- [Phase 06-validation-and-release-hardening]: Generated runtime output uses wildcarded unused bindings plus `match` arms so the release example stays warning-clean
 
 ### Roadmap Evolution
 
