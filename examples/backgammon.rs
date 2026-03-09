@@ -250,7 +250,7 @@ impl Operation<BgState> for BackgammonOp {
                     *to as u8,
                     *captured as u8,
                     *die_index as u8,
-                    (*player_sign as i8 + 1) as u8,
+                    (*player_sign + 1) as u8,
                 ]
             }
             BackgammonOp::ReEnterOp {
@@ -264,7 +264,7 @@ impl Operation<BgState> for BackgammonOp {
                     *bar_idx as u8,
                     *to as u8,
                     *die_index as u8,
-                    (*player_sign as i8 + 1) as u8,
+                    (*player_sign + 1) as u8,
                 ]
             }
             BackgammonOp::BearOffOp {
@@ -272,12 +272,7 @@ impl Operation<BgState> for BackgammonOp {
                 die_index,
                 player_sign,
             } => {
-                vec![
-                    3,
-                    *from as u8,
-                    *die_index as u8,
-                    (*player_sign as i8 + 1) as u8,
-                ]
+                vec![3, *from as u8, *die_index as u8, (*player_sign + 1) as u8]
             }
         }
     }
