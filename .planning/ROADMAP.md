@@ -43,7 +43,10 @@ Plans:
   2. `dispatch_preview` is confirmed by property test to leave `state`, `replay_hash`, `lifetimes`, and the enabled rule set identical to before the call
   3. `RuleLifetime::Turns(n)` and `RuleLifetime::Triggers(n)` rules are confirmed by property test to disable at exactly the right counts — no off-by-one
   4. A cancelled transaction (`tx.cancelled = true`) is confirmed by property test to leave `state` and `replay_hash` bitwise identical to a snapshot taken before dispatch
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 02-01-PLAN.md — Four proptest property tests in mod props: PROP-01 undo roundtrip, PROP-02 preview isolation, PROP-03 lifetime correctness, PROP-04 cancelled tx isolation
 
 ### Phase 3: Backgammon Example and Integration Properties
 **Goal**: A runnable backgammon example demonstrates the engine handling non-determinism and partial-move undo, and proptest integration properties verify board conservation and per-die undo correctness
@@ -65,5 +68,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Module Split and Foundation | 3/3 | Complete   | 2026-03-09 |
-| 2. Engine Property Tests | 0/TBD | Not started | - |
+| 2. Engine Property Tests | 0/1 | Not started | - |
 | 3. Backgammon Example and Integration Properties | 0/TBD | Not started | - |
