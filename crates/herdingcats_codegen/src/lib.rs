@@ -1,8 +1,10 @@
 pub mod ast;
 pub mod bindings;
+pub mod codegen;
 pub mod diagnostics;
 pub mod ir;
 pub mod parser;
+pub mod render;
 pub mod validate;
 
 use std::fs;
@@ -10,9 +12,11 @@ use std::path::Path;
 
 use ast::{RuleFileAst, SourceFile};
 use bindings::BindingConfig;
+use codegen::generate_module;
 use diagnostics::Diagnostic;
 use ir::RuleSetIr;
 use parser::parse_rule_file;
+use render::write_generated_module;
 use validate::lower_to_ir;
 
 pub fn parse_str(contents: &str) -> Result<RuleFileAst, Diagnostic> {
@@ -39,4 +43,16 @@ pub fn lower_with_bindings(
     bindings: &BindingConfig,
 ) -> Result<RuleSetIr, Diagnostic> {
     lower_to_ir(ast, bindings)
+}
+
+pub fn generate_source(ir: &RuleSetIr) -> String {
+    generate_module(ir)
+}
+
+pub fn write_source(
+    out_dir: impl AsRef<Path>,
+    file_name: &str,
+    source: &str,
+) -> Result<std::path::PathBuf, Diagnostic> {
+    write_generated_module(out_dir, file_name, source)
 }
