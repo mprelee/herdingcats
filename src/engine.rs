@@ -713,3 +713,127 @@ mod tests {
         assert_eq!(engine.read(), 0);
     }
 }
+
+// ============================================================
+// Property Tests
+// ============================================================
+
+#[cfg(test)]
+mod props {
+    use super::*;
+    use crate::transaction::{RuleLifetime, Transaction};
+    use proptest::prelude::*;
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    // --------------------------------------------------------
+    // CounterOp fixture
+    // --------------------------------------------------------
+
+    #[derive(Clone, Debug)]
+    enum CounterOp {
+        Inc,
+        Dec,
+    }
+
+    impl Operation<i32> for CounterOp {
+        fn apply(&self, state: &mut i32) {
+            match self {
+                CounterOp::Inc => *state += 1,
+                CounterOp::Dec => *state -= 1,
+            }
+        }
+        fn undo(&self, state: &mut i32) {
+            match self {
+                CounterOp::Inc => *state -= 1,
+                CounterOp::Dec => *state += 1,
+            }
+        }
+        fn hash_bytes(&self) -> Vec<u8> {
+            match self {
+                CounterOp::Inc => vec![0],
+                CounterOp::Dec => vec![1],
+            }
+        }
+    }
+
+    // --------------------------------------------------------
+    // NoRule fixture
+    // --------------------------------------------------------
+
+    struct NoRule;
+
+    impl Rule<i32, CounterOp, (), u8> for NoRule {
+        fn id(&self) -> &'static str {
+            "no_rule"
+        }
+        fn priority(&self) -> u8 {
+            0
+        }
+    }
+
+    // --------------------------------------------------------
+    // CountingRule fixture (for PROP-03)
+    // --------------------------------------------------------
+
+    struct CountingRule {
+        trigger_count: Rc<Cell<u32>>,
+    }
+
+    impl Rule<i32, CounterOp, (), u8> for CountingRule {
+        fn id(&self) -> &'static str {
+            "counting_rule"
+        }
+        fn priority(&self) -> u8 {
+            0
+        }
+        fn before(
+            &self,
+            _state: &i32,
+            _event: &mut (),
+            _tx: &mut Transaction<CounterOp>,
+        ) {
+            self.trigger_count
+                .set(self.trigger_count.get() + 1);
+        }
+    }
+
+    // --------------------------------------------------------
+    // Shared strategy
+    // --------------------------------------------------------
+
+    fn op_sequence_strategy() -> impl Strategy<Value = Vec<CounterOp>> {
+        prop::collection::vec(
+            prop_oneof![Just(CounterOp::Inc), Just(CounterOp::Dec)],
+            0..=20,
+        )
+    }
+
+    // --------------------------------------------------------
+    // PROP-01: undo roundtrip restores both state and replay_hash
+    // --------------------------------------------------------
+
+    proptest! {
+        #[test]
+        fn prop_01_undo_roundtrip(ops in op_sequence_strategy()) {
+            let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+            engine.add_rule(NoRule, RuleLifetime::Permanent);
+
+            let state_before = engine.read();
+            let hash_before = engine.replay_hash();
+
+            for op in &ops {
+                let mut tx = Transaction::new();
+                tx.ops.push(op.clone());
+                engine.dispatch((), tx);
+            }
+
+            for _ in &ops {
+                engine.undo();
+            }
+
+            prop_assert_eq!(engine.read(), state_before);
+            prop_assert_eq!(engine.replay_hash(), hash_before);
+        }
+    }
+}
