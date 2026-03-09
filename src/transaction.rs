@@ -58,6 +58,12 @@ impl<O> Transaction<O> {
     }
 }
 
+impl<O> Default for Transaction<O> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // ============================================================
 // Rule Lifetime
 // ============================================================
