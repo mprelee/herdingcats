@@ -356,14 +356,13 @@ where
         }
 
         for (id, lifetime) in self.lifetimes.iter_mut() {
-            if let RuleLifetime::Turns(n) = lifetime {
-                if *n > 0 {
+            if let RuleLifetime::Turns(n) = lifetime
+                && *n > 0 {
                     *n -= 1;
                     if *n == 0 {
                         self.enabled.remove(id);
                     }
                 }
-            }
         }
 
         if tx.irreversible && !tx.cancelled {
