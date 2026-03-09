@@ -27,10 +27,10 @@
 
 ### Backgammon Example
 
-- [ ] **BACK-01**: `examples/backgammon.rs` is a runnable example (`cargo run --example backgammon` succeeds) demonstrating a short game sequence
-- [ ] **BACK-02**: Board representation: `[i8; 26]` where indices 0–23 are points (positive = White, negative = Black, magnitude = count), index 24 = White bar, 25 = Black bar, plus two `u8` bear-off counters
+- [x] **BACK-01**: `examples/backgammon.rs` is a runnable example (`cargo run --example backgammon` succeeds) demonstrating a short game sequence
+- [x] **BACK-02**: Board representation: `[i8; 26]` where indices 0–23 are points (positive = White, negative = Black, magnitude = count), index 24 = White bar, 25 = Black bar, plus two `u8` bear-off counters
 - [ ] **BACK-03**: `RollDice` event produces its own `CommitFrame` (committed separately from moves), enabling per-die undo — this is architecturally distinct from `Move` events
-- [ ] **BACK-04**: `Move` event covers: place checker on empty point, hit opponent blot (sends to bar), re-enter from bar, bear off to home
+- [x] **BACK-04**: `Move` event covers: place checker on empty point, hit opponent blot (sends to bar), re-enter from bar, bear off to home
 - [ ] **BACK-05**: Property test (proptest): board conservation — total checker count across all points + bars + home is invariant across any sequence of valid moves
 - [ ] **BACK-06**: Property test (proptest): per-die undo — after dispatching a `Move` event for one die, `engine.undo()` fully restores both `state` and `replay_hash` to pre-move values
 
@@ -83,10 +83,10 @@
 | PROP-02 | Phase 2 | Complete |
 | PROP-03 | Phase 2 | Complete |
 | PROP-04 | Phase 2 | Complete |
-| BACK-01 | Phase 3 | Pending |
-| BACK-02 | Phase 3 | Pending |
+| BACK-01 | Phase 3 | Complete |
+| BACK-02 | Phase 3 | Complete |
 | BACK-03 | Phase 3 | Pending |
-| BACK-04 | Phase 3 | Pending |
+| BACK-04 | Phase 3 | Complete |
 | BACK-05 | Phase 3 | Pending |
 | BACK-06 | Phase 3 | Pending |
 

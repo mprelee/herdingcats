@@ -73,4 +73,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. Module Split and Foundation | 3/3 | Complete   | 2026-03-09 |
 | 2. Engine Property Tests | 1/1 | Complete   | 2026-03-09 |
-| 3. Backgammon Example and Integration Properties | 0/2 | Not started | - |
+| 3. Backgammon Example and Integration Properties | 1/2 | In Progress|  |

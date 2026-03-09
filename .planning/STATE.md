@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 3 context gathered
-last_updated: "2026-03-09T04:31:38.440Z"
+stopped_at: Completed 03-backgammon-example-and-integration-properties-03-01-PLAN.md
+last_updated: "2026-03-09T06:34:37.118Z"
 last_activity: 2026-03-08 — Roadmap created; phases derived from requirements
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
   percent: 0
 ---
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-module-split-and-foundation P02 | 2 | 2 tasks | 5 files |
 | Phase 01-module-split-and-foundation P03 | 12 | 2 tasks | 5 files |
 | Phase 02-engine-property-tests P01 | 8 | 2 tasks | 1 files |
+| Phase 03-backgammon-example-and-integration-properties P01 | 3 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - [Phase 02-engine-property-tests]: PROP-02 indirect isolation check: compare post-preview dispatch results against reference engine instead of inspecting private fields
 - [Phase 02-engine-property-tests]: PROP-03 uses Rc<Cell<u32>> trigger_count to observe CountingRule.before() calls without accessing private engine.enabled/lifetimes
 - [Phase 02-engine-property-tests]: PROP-04 uses NoRule/Permanent — asserts state+hash only, avoids Turns unconditional-decrement edge case on cancelled dispatch
+- [Phase 03-backgammon-example-and-integration-properties]: Backgammon op variants carry player_sign: i8 field for uniform arithmetic instead of Player enum
+- [Phase 03-backgammon-example-and-integration-properties]: Isolated op unit tests use minimal BgState (not BgState::new()) to avoid 30-checker invariant collision
+- [Phase 03-backgammon-example-and-integration-properties]: Phase 3 BACK-02 bearing-off risk resolved: [i8;26] encoding with BearOffOp writing home counters (not board[26]) verified correct via roundtrip tests
 
 ### Pending Todos
 
@@ -88,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T04:31:38.438Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-backgammon-example-and-integration-properties/03-CONTEXT.md
+Last session: 2026-03-09T06:34:37.117Z
+Stopped at: Completed 03-backgammon-example-and-integration-properties-03-01-PLAN.md
+Resume file: None
