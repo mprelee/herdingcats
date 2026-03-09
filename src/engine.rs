@@ -332,12 +332,12 @@ where
             if self.enabled.contains(rule.id()) {
                 rule.before(&self.state, &mut event, &mut tx);
 
-                if let Some(RuleLifetime::Triggers(n)) = self.lifetimes.get_mut(rule.id()) {
-                    if *n > 0 {
-                        *n -= 1;
-                        if *n == 0 {
-                            self.enabled.remove(rule.id());
-                        }
+                if let Some(RuleLifetime::Triggers(n)) = self.lifetimes.get_mut(rule.id())
+                    && *n > 0
+                {
+                    *n -= 1;
+                    if *n == 0 {
+                        self.enabled.remove(rule.id());
                     }
                 }
             }
