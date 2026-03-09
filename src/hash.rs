@@ -13,3 +13,27 @@ pub(crate) fn fnv1a_hash(bytes: &[u8]) -> u64 {
     }
     hash
 }
+
+// ============================================================
+// Tests
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hash_determinism() {
+        assert_eq!(fnv1a_hash(b"hello"), fnv1a_hash(b"hello"));
+    }
+
+    #[test]
+    fn hash_sensitivity() {
+        assert_ne!(fnv1a_hash(b"hello"), fnv1a_hash(b"world"));
+    }
+
+    #[test]
+    fn hash_empty_input() {
+        assert_eq!(fnv1a_hash(&[]), FNV_OFFSET);
+    }
+}

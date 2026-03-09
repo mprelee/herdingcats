@@ -31,3 +31,28 @@ pub enum RuleLifetime {
     Turns(u32),
     Triggers(u32),
 }
+
+// ============================================================
+// Tests
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transaction_new_defaults() {
+        let tx: Transaction<()> = Transaction::new();
+        assert!(tx.ops.is_empty());
+        assert!(tx.irreversible);
+        assert!(tx.deterministic);
+        assert!(!tx.cancelled);
+    }
+
+    #[test]
+    fn transaction_cancelled_can_be_set() {
+        let mut tx: Transaction<()> = Transaction::new();
+        tx.cancelled = true;
+        assert!(tx.cancelled);
+    }
+}
