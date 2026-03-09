@@ -836,4 +836,185 @@ mod props {
             prop_assert_eq!(engine.replay_hash(), hash_before);
         }
     }
+
+    // --------------------------------------------------------
+    // PROP-02: dispatch_preview leaves state and replay_hash unchanged
+    // --------------------------------------------------------
+
+    proptest! {
+        #[test]
+        fn prop_02_preview_isolation(ops in op_sequence_strategy()) {
+            let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+            engine.add_rule(NoRule, RuleLifetime::Permanent);
+
+            // Establish a non-trivial pre-preview state
+            for op in &ops {
+                let mut tx = Transaction::new();
+                tx.ops.push(op.clone());
+                engine.dispatch((), tx);
+            }
+
+            let state_before = engine.read();
+            let hash_before = engine.replay_hash();
+
+            // Build and run a preview transaction with the same ops
+            let mut preview_tx = Transaction::new();
+            for op in &ops {
+                preview_tx.ops.push(op.clone());
+            }
+            engine.dispatch_preview((), preview_tx);
+
+            // Direct observable comparison: state and hash must be unchanged
+            prop_assert_eq!(
+                engine.read(),
+                state_before,
+                "state changed after dispatch_preview"
+            );
+            prop_assert_eq!(
+                engine.replay_hash(),
+                hash_before,
+                "replay_hash changed after dispatch_preview"
+            );
+
+            // Indirect lifetime/enabled isolation check: if dispatch_preview
+            // had mutated lifetimes or enabled, subsequent dispatches would
+            // diverge from a reference engine that never saw the preview.
+            let mut reference_engine: Engine<i32, CounterOp, (), u8> =
+                Engine::new(state_before);
+            reference_engine.add_rule(NoRule, RuleLifetime::Permanent);
+
+            for op in &ops {
+                let mut tx_ref = Transaction::new();
+                tx_ref.ops.push(op.clone());
+                reference_engine.dispatch((), tx_ref);
+
+                let mut tx_actual = Transaction::new();
+                tx_actual.ops.push(op.clone());
+                engine.dispatch((), tx_actual);
+            }
+
+            prop_assert_eq!(
+                engine.read(),
+                reference_engine.read(),
+                "post-preview dispatches diverged from reference — lifetimes/enabled were mutated"
+            );
+        }
+    }
+
+    // --------------------------------------------------------
+    // PROP-03: rule lifetimes disable at exactly n dispatches
+    // --------------------------------------------------------
+
+    proptest! {
+        #[test]
+        fn prop_03_turns_lifetime(n in 1u32..=10u32) {
+            let trigger_count = Rc::new(Cell::new(0u32));
+            let trigger_count_clone = Rc::clone(&trigger_count);
+
+            let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+            engine.add_rule(
+                CountingRule { trigger_count },
+                RuleLifetime::Turns(n),
+            );
+
+            // Dispatch n - 1 times: rule must still be enabled (Turns not yet 0)
+            for _ in 0..n.saturating_sub(1) {
+                let tx = Transaction::new();
+                engine.dispatch((), tx);
+            }
+
+            // n-th dispatch: Turns reaches 0 and rule is removed from enabled
+            // CountingRule.before() is NOT called by Turns (Turns uses post-dispatch loop)
+            // so trigger_count tracks before() calls, which reflect prior dispatches
+            let tx = Transaction::new();
+            engine.dispatch((), tx);
+
+            // After n dispatches, the Turns post-dispatch loop should have fired n times
+            // CountingRule.before() is called on each dispatch while enabled
+            prop_assert_eq!(
+                trigger_count_clone.get(),
+                n,
+                "CountingRule.before() should have been called exactly n={} times, got {}",
+                n,
+                trigger_count_clone.get()
+            );
+
+            // Confirm disabled: one more dispatch must not increment trigger_count
+            let tx_extra = Transaction::new();
+            engine.dispatch((), tx_extra);
+
+            prop_assert_eq!(
+                trigger_count_clone.get(),
+                n,
+                "Rule still fired after being disabled at n={} Turns",
+                n
+            );
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn prop_03_triggers_lifetime(n in 1u32..=10u32) {
+            let trigger_count = Rc::new(Cell::new(0u32));
+            let trigger_count_clone = Rc::clone(&trigger_count);
+
+            let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+            engine.add_rule(
+                CountingRule { trigger_count },
+                RuleLifetime::Triggers(n),
+            );
+
+            // Dispatch n times: rule fires n times, on the nth before() call
+            // the Triggers counter reaches 0 and rule is removed from enabled
+            for _ in 0..n {
+                let tx = Transaction::new();
+                engine.dispatch((), tx);
+            }
+
+            prop_assert_eq!(
+                trigger_count_clone.get(),
+                n,
+                "CountingRule.before() should have been called exactly n={} times, got {}",
+                n,
+                trigger_count_clone.get()
+            );
+
+            // Confirm disabled: one more dispatch must not increment trigger_count
+            let tx_extra = Transaction::new();
+            engine.dispatch((), tx_extra);
+
+            prop_assert_eq!(
+                trigger_count_clone.get(),
+                n,
+                "Rule still fired after being disabled at n={} Triggers",
+                n
+            );
+        }
+    }
+
+    // --------------------------------------------------------
+    // PROP-04: cancelled transaction leaves state and replay_hash unchanged
+    // --------------------------------------------------------
+
+    proptest! {
+        #[test]
+        fn prop_04_cancelled_tx_isolation(ops in op_sequence_strategy()) {
+            let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+            engine.add_rule(NoRule, RuleLifetime::Permanent);
+
+            let state_before = engine.read();
+            let hash_before = engine.replay_hash();
+
+            let mut tx = Transaction::new();
+            for op in &ops {
+                tx.ops.push(op.clone());
+            }
+            tx.cancelled = true;
+
+            engine.dispatch((), tx);
+
+            prop_assert_eq!(engine.read(), state_before);
+            prop_assert_eq!(engine.replay_hash(), hash_before);
+        }
+    }
 }
