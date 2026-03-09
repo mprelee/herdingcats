@@ -34,7 +34,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Language design: grammar scope, AST, authored rule examples, and `before()`-only semantic contract
+- [x] 04-01-PLAN.md — Language design: grammar scope, AST, authored rule examples, and `before()`-only semantic contract
 - [ ] 04-02-PLAN.md — Semantic validation: IR, reversibility checks, stable rule-id policy, and binding/config model
 
 ### Phase 5: Build-Time Compiler and Example Integration
@@ -78,6 +78,6 @@ Phases execute in numeric order: 4 → 5 → 6
 | 1. Module Split and Foundation | v1.0 | 3/3 | Complete | 2026-03-09 |
 | 2. Engine Property Tests | v1.0 | 1/1 | Complete | 2026-03-09 |
 | 3. Backgammon Example and Integration Properties | v1.0 | 2/2 | Complete | 2026-03-09 |
-| 4. DSL Scope and Semantic Contract | v1.1 | 0/2 | Pending | - |
+| 4. DSL Scope and Semantic Contract | v1.1 | 1/2 | In Progress | - |
 | 5. Build-Time Compiler and Example Integration | v1.1 | 0/3 | Pending | - |
 | 6. Validation and Release Hardening | v1.1 | 0/2 | Pending | - |
