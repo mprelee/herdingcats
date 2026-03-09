@@ -4,6 +4,19 @@ This document locks the Phase 4 authored-language boundary for `herdingcats` v1.
 
 The goal is narrow: let a consumer define additional rules in external DSL files that lower into generated Rust implementing the existing `Rule` trait. This DSL is not a scripting language, not a runtime mod format, and not a replacement for handwritten engine or game code.
 
+## Build-Time Integration Path
+
+The v1.1 DSL is a build-time authoring tool.
+
+- Parse authored `.cats` files from `build.rs`.
+- Lower them through `herdingcats_codegen`.
+- Write generated Rust into `OUT_DIR`.
+- `include!` that generated module into the consumer crate and register generated rules beside handwritten ones.
+
+There is no runtime parser, no runtime scripting entrypoint, and no expectation that authored rules are loaded dynamically after compilation.
+
+Handwritten-only usage remains valid: consumers can ignore the DSL path entirely and keep using handwritten `Rule` and `Operation` implementations.
+
 ## Design Constraints
 
 Every authored rule must map onto existing engine semantics from `src/rule.rs`, `src/transaction.rs`, and `src/operation.rs`:

@@ -24,6 +24,17 @@ It provides:
 
 The engine is application-agnostic and does not prescribe game semantics.
 
+## v1.1 DSL Path
+
+`herdingcats` now also has a build-time DSL path for authoring additional rules.
+
+- The DSL is **build-time only**: consumers parse authored `.cats` files in `build.rs` and include generated Rust from `OUT_DIR`.
+- There is **no runtime parser** and **no runtime scripting** surface in the main crate.
+- Generated mutating behavior is limited to `before()` semantics in v1.1; broad generated `after()` mutation is out of scope.
+- Handwritten `Rule` and `Operation` usage remains first-class and unchanged when the DSL path is unused.
+
+If you do not want the DSL path, use `herdingcats` exactly as before with handwritten rules and operations.
+
 ---
 
 ## Core Model
@@ -80,7 +91,7 @@ Not intended for:
 
 ## Status
 
-Pre‑1.0. API may change.
+v1.1 development in progress. The runtime crate remains usable on its own; DSL support stays on the build-time side of the boundary.
 
 ---
 
