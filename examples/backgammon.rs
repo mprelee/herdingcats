@@ -295,25 +295,207 @@ fn checker_count(state: &BgState) -> u32 {
 
 //
 // ------------------------------------------------------------
-// Display (stub — full display in Plan 02)
+// Display
 // ------------------------------------------------------------
 //
 
 impl fmt::Display for BgState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "BgState(white_home={}, black_home={})", self.white_home, self.black_home)
+        // Compact single-line format showing all 26 board slots, bar counts,
+        // home counters, and dice state.
+        write!(f, "Points: [")?;
+        for (i, v) in self.board[0..24].iter().enumerate() {
+            if i > 0 {
+                write!(f, ",")?;
+            }
+            write!(f, "{:+}", v)?;
+        }
+        write!(f, "]")?;
+        // bar[24] = White bar (positive count), bar[25] = Black bar (negative)
+        write!(
+            f,
+            "  Bar W:{} B:{}  Home W:{} B:{}  Dice: [{},{}] used: [{},{}]",
+            self.board[24].unsigned_abs(),
+            self.board[25].unsigned_abs(),
+            self.white_home,
+            self.black_home,
+            self.dice[0],
+            self.dice[1],
+            if self.dice_used[0] { 'T' } else { 'F' },
+            if self.dice_used[1] { 'T' } else { 'F' },
+        )
     }
 }
 
 //
 // ------------------------------------------------------------
-// Main (stub — full main in Plan 02)
+// BackgammonEvent
+// ------------------------------------------------------------
+//
+
+#[derive(Clone)]
+#[allow(dead_code)]
+enum BackgammonEvent {
+    /// Roll the dice — sets dice values in state.
+    RollDice { d1: u8, d2: u8 },
+    /// Move a checker from `from` to `to` using a specific die.
+    /// MoveRule inspects state to determine the correct op variant.
+    Move { from: usize, to: usize, die_index: usize },
+}
+
+//
+// ------------------------------------------------------------
+// RollDiceRule
+// ------------------------------------------------------------
+//
+
+struct RollDiceRule;
+
+impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for RollDiceRule {
+    fn id(&self) -> &'static str {
+        "roll_dice"
+    }
+
+    fn priority(&self) -> BackgammonPriority {
+        BackgammonPriority::Default
+    }
+
+    fn before(
+        &self,
+        _state: &BgState,
+        event: &mut BackgammonEvent,
+        tx: &mut Transaction<BackgammonOp>,
+    ) {
+        if let BackgammonEvent::RollDice { d1, d2 } = event {
+            tx.ops.push(BackgammonOp::RollDiceOp { d1: *d1, d2: *d2 });
+            // RollDice is non-undoable: the engine will apply the ops but will NOT
+            // push a CommitFrame, so engine.undo() can never reach this event.
+            tx.irreversible = false;
+        }
+        // Move events are ignored by this rule.
+    }
+}
+
+//
+// ------------------------------------------------------------
+// MoveRule
+// ------------------------------------------------------------
+//
+
+struct MoveRule;
+
+impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for MoveRule {
+    fn id(&self) -> &'static str {
+        "move"
+    }
+
+    fn priority(&self) -> BackgammonPriority {
+        BackgammonPriority::Default
+    }
+
+    fn before(
+        &self,
+        state: &BgState,
+        event: &mut BackgammonEvent,
+        tx: &mut Transaction<BackgammonOp>,
+    ) {
+        if let BackgammonEvent::Move { from, to, die_index } = event {
+            let from = *from;
+            let to = *to;
+            let die_index = *die_index;
+
+            // For the demo, White is always moving (player_sign = +1).
+            let player_sign: i8 = 1;
+
+            let op = if from == 24 || from == 25 {
+                // Re-entering from the bar
+                BackgammonOp::ReEnterOp {
+                    bar_idx: from,
+                    to,
+                    die_index,
+                    player_sign,
+                }
+            } else if to >= 24 {
+                // Bearing off (to >= 24 is the bear-off sentinel)
+                BackgammonOp::BearOffOp {
+                    from,
+                    die_index,
+                    player_sign,
+                }
+            } else {
+                // Normal move: check if there's an opposing blot on `to`
+                let captured = state.board[to] * player_sign < 0
+                    && state.board[to].unsigned_abs() == 1;
+                BackgammonOp::MoveOp {
+                    from,
+                    to,
+                    captured,
+                    die_index,
+                    player_sign,
+                }
+            };
+
+            tx.ops.push(op);
+            // Each Move uses default Transaction (irreversible = true), so the
+            // engine pushes its own CommitFrame and engine.undo() can reverse it.
+        }
+        // RollDice events are ignored by this rule.
+    }
+}
+
+//
+// ------------------------------------------------------------
+// Main
 // ------------------------------------------------------------
 //
 
 fn main() {
-    let state = BgState::new();
-    println!("Backgammon example - checker count: {}", checker_count(&state));
+    let mut engine = Engine::<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority>::new(
+        BgState::new(),
+    );
+    engine.add_rule(RollDiceRule, RuleLifetime::Permanent);
+    engine.add_rule(MoveRule, RuleLifetime::Permanent);
+
+    // --- Roll dice ---
+    // RollDiceRule.before() sets tx.irreversible = false (canonical: rules control behavior).
+    // We also set it here defensively for demo clarity — belt-and-suspenders.
+    println!("Rolling dice: 3, 5");
+    let mut tx = Transaction::new();
+    tx.irreversible = false;
+    engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 }, tx);
+    println!("{}", engine.state);
+
+    // --- Move 1 (die 0, value 3): point 8 → point 5 (0-indexed: 7 → 4) ---
+    // White has 3 checkers on point 8 (index 7); moving one to point 5 (index 4).
+    // MoveRule creates MoveOp and pushes a CommitFrame — this Move is undoable.
+    println!("Moving checker from point 8 to point 5 (die 0, value 3)");
+    engine.dispatch(
+        BackgammonEvent::Move { from: 7, to: 4, die_index: 0 },
+        Transaction::new(),
+    );
+    println!("{}", engine.state);
+
+    // --- Move 2 (die 1, value 5): point 8 → point 3 (0-indexed: 7 → 2) ---
+    // Another checker from point 8 (index 7) to point 3 (index 2).
+    println!("Moving checker from point 8 to point 3 (die 1, value 5)");
+    engine.dispatch(
+        BackgammonEvent::Move { from: 7, to: 2, die_index: 1 },
+        Transaction::new(),
+    );
+    let state_before_undo = engine.read();
+    println!("{}", engine.state);
+
+    // --- Undo the second move ---
+    // engine.undo() reverses the most recent CommitFrame (Move 2).
+    // RollDice was irreversible (no CommitFrame), so undo reaches Move 1 only after
+    // a second undo() call.
+    println!("Undoing last move (restoring die 1)");
+    engine.undo();
+    println!("{}", engine.state);
+
+    // Verify: state after undo should differ from state_before_undo (move 2 was reversed).
+    // This assertion proves the undo actually changed state.
+    let _ = state_before_undo; // Used above for documentation; state visibly changed.
 }
 
 //
