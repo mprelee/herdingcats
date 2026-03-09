@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 Refactor and Test** — Phases 1-3 (shipped 2026-03-09)
-- ○ **v1.1 Pest Feature (PEG Parser)** — Phases 4-6 (planned)
+- ○ **v1.1 Pest Feature (PEG Parser)** — Phases 4-8 (gap closure pending)
 
 ## Overview
 
@@ -68,10 +68,34 @@ Plans:
 - [x] 06-01-PLAN.md — Validation suite: equivalence tests, property tests, and deterministic codegen assertions
 - [x] 06-02-PLAN.md — Release hardening: diagnostics polish, compatibility checks, docs/examples update, and final API-boundary review
 
+### Phase 7: DSL Integration Gap Closure
+**Goal**: Close the real authored-rule integration gaps that still break valid v1.1 DSL scenarios in consumer builds
+**Depends on**: Phase 6
+**Requirements**: DSL-03, GEN-02, GEN-03, GEN-05
+**Gap Closure**: Closes audit findings for event-field guard bindings and duplicate generated operation families
+**Success Criteria** (what must be TRUE):
+1. Event-field guard bindings allowed by the Phase 4 DSL contract compile and validate in the real consumer build path
+2. Multi-rule authored DSL files that emit the same approved operation family generate compileable Rust without duplicate generated variants
+3. Generated operations and registration helpers remain compatible with the existing runtime traits after the gap fixes
+4. The Phase 6 validation harness covers the newly fixed scenarios so the gaps cannot silently regress
+**Plans**: pending planning
+
+### Phase 8: Verification and Milestone Reconciliation
+**Goal**: Re-verify the repaired v1.1 milestone, close missing verification artifacts, and reconcile requirement tracking so the milestone can be archived cleanly
+**Depends on**: Phase 7
+**Requirements**: GEN-04, INT-01, INT-02, INT-03, INT-04, INT-05
+**Gap Closure**: Closes audit findings for missing Phase 5/6 verification artifacts and requirement bookkeeping
+**Success Criteria** (what must be TRUE):
+1. Phase 5 and Phase 6 have formal verification artifacts matching the implemented and repaired milestone behavior
+2. REQUIREMENTS.md accurately distinguishes satisfied requirements from remaining gaps and no v1.1 requirement is orphaned
+3. A fresh milestone audit passes with no critical requirement, integration, or flow gaps
+4. The milestone can proceed to archive without accepting known v1.1 tech debt
+**Plans**: pending planning
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 4 → 5 → 6
+Phases execute in numeric order: 4 → 5 → 6 → 7 → 8
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -81,3 +105,5 @@ Phases execute in numeric order: 4 → 5 → 6
 | 4. DSL Scope and Semantic Contract | v1.1 | 2/2 | Complete | 2026-03-09 |
 | 5. Build-Time Compiler and Example Integration | v1.1 | 3/3 | Complete | 2026-03-09 |
 | 6. Validation and Release Hardening | v1.1 | 2/2 | Complete | 2026-03-09 |
+| 7. DSL Integration Gap Closure | v1.1 | 0/0 | Pending | - |
+| 8. Verification and Milestone Reconciliation | v1.1 | 0/0 | Pending | - |

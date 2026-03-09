@@ -7,14 +7,14 @@
 
 ### DSL Authoring Surface
 
-- [ ] **DSL-01**: Library consumer can define additional rules in external DSL files parsed from a `.pest` grammar
-- [ ] **DSL-02**: Each authored rule can declare a stable rule id, priority, and lifetime compatible with `herdingcats::Rule`
+- [x] **DSL-01**: Library consumer can define additional rules in external DSL files parsed from a `.pest` grammar
+- [x] **DSL-02**: Each authored rule can declare a stable rule id, priority, and lifetime compatible with `herdingcats::Rule`
 - [ ] **DSL-03**: Each authored rule can match on a constrained event surface and guard on approved state/event bindings
-- [ ] **DSL-04**: DSL scope is explicitly limited to semantics that compile into engine-compatible `before()` behavior
+- [x] **DSL-04**: DSL scope is explicitly limited to semantics that compile into engine-compatible `before()` behavior
 
 ### Semantic Lowering and Code Generation
 
-- [ ] **GEN-01**: Authored DSL lowers into a validated intermediate representation before Rust code generation
+- [x] **GEN-01**: Authored DSL lowers into a validated intermediate representation before Rust code generation
 - [ ] **GEN-02**: Build-time generation emits Rust code that compiles into `Rule` implementations compatible with the existing engine trait surface
 - [ ] **GEN-03**: Generated mutations flow through reversible `Operation` implementations rather than direct state mutation
 - [ ] **GEN-04**: Generated operations produce stable deterministic `hash_bytes()` output suitable for replay hashing
@@ -54,20 +54,20 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DSL-01 | Phase 4 | Pending |
-| DSL-02 | Phase 4 | Pending |
-| DSL-03 | Phase 4 | Pending |
-| DSL-04 | Phase 4 | Pending |
-| GEN-01 | Phase 4 | Pending |
-| GEN-02 | Phase 5 | Pending |
-| GEN-03 | Phase 5 | Pending |
-| GEN-04 | Phase 6 | Pending |
-| GEN-05 | Phase 5 | Pending |
-| INT-01 | Phase 5 | Pending |
-| INT-02 | Phase 5 | Pending |
-| INT-03 | Phase 6 | Pending |
-| INT-04 | Phase 6 | Pending |
-| INT-05 | Phase 6 | Pending |
+| DSL-01 | Phase 4 | Complete |
+| DSL-02 | Phase 4 | Complete |
+| DSL-03 | Phase 7 | Pending |
+| DSL-04 | Phase 4 | Complete |
+| GEN-01 | Phase 4 | Complete |
+| GEN-02 | Phase 7 | Pending |
+| GEN-03 | Phase 7 | Pending |
+| GEN-04 | Phase 8 | Pending |
+| GEN-05 | Phase 7 | Pending |
+| INT-01 | Phase 8 | Pending |
+| INT-02 | Phase 8 | Pending |
+| INT-03 | Phase 8 | Pending |
+| INT-04 | Phase 8 | Pending |
+| INT-05 | Phase 8 | Pending |
 
 **Coverage:**
 - v1 requirements: 14 total
