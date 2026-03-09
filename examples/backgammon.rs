@@ -65,7 +65,7 @@ impl BgState {
 // ------------------------------------------------------------
 //
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 #[allow(dead_code)]
 enum BackgammonOp {
     /// Roll dice: store d1 and d2 into state.dice
@@ -288,6 +288,7 @@ impl Operation<BgState> for BackgammonOp {
 // ------------------------------------------------------------
 //
 
+#[allow(dead_code)]
 fn checker_count(state: &BgState) -> u32 {
     let board_sum: u32 = state.board.iter().map(|x| x.unsigned_abs() as u32).sum();
     board_sum + state.white_home as u32 + state.black_home as u32
@@ -752,5 +753,113 @@ mod tests {
         assert_eq!(checker_count(&state), count_before);
         op.undo(&mut state);
         assert_eq!(checker_count(&state), count_before);
+    }
+}
+
+//
+// ------------------------------------------------------------
+// Property Tests
+// ------------------------------------------------------------
+//
+
+#[cfg(test)]
+mod props {
+    use super::*;
+    use proptest::prelude::*;
+
+    // Strategy: generate a single valid MoveOp from the standard starting position.
+    // Valid White source points (0-indexed): 5, 7, 12, 23
+    // Move distance constrained 1..=6 (die range), to must be < 24.
+    prop_compose! {
+        fn valid_move_op_strategy()
+            (from_choice in prop_oneof![Just(5usize), Just(7usize), Just(12usize), Just(23usize)],
+             distance in 1usize..=6,
+             die_index in 0usize..=1usize)
+        -> BackgammonOp {
+            // White moves toward lower indices in 0-indexed layout
+            let to = from_choice.saturating_sub(distance);
+            BackgammonOp::MoveOp {
+                from: from_choice,
+                to,
+                captured: false, // standard position has no opposing blots at these positions
+                die_index,
+                player_sign: 1,
+            }
+        }
+    }
+
+    // Strategy: generate a sequence of conservative MoveOps for BACK-05.
+    // Only MoveOp with from and to both on the board (0..=23), captured=false.
+    // Apply+undo pairs maintain conservation without requiring a valid game state.
+    prop_compose! {
+        fn conservative_op_sequence()
+            (ops in proptest::collection::vec(
+                (0usize..24, 1usize..=6, 0usize..=1usize).prop_map(|(from, dist, die)| {
+                    BackgammonOp::MoveOp {
+                        from,
+                        to: from.saturating_sub(dist),
+                        captured: false,
+                        die_index: die,
+                        player_sign: 1,
+                    }
+                }),
+                0..=20
+            ))
+        -> Vec<BackgammonOp> { ops }
+    }
+
+    proptest! {
+        // BACK-05: board conservation invariant.
+        // For any generated sequence of apply+undo pairs, checker_count stays at 30.
+        #[test]
+        fn prop_board_conservation(ops in conservative_op_sequence()) {
+            let mut state = BgState::new();
+            let count_before = checker_count(&state);
+            prop_assert_eq!(count_before, 30u32);
+
+            for op in &ops {
+                op.apply(&mut state);
+                op.undo(&mut state);
+            }
+            prop_assert_eq!(checker_count(&state), 30u32);
+        }
+
+        // BACK-06: per-die undo roundtrip.
+        // After dispatching a Move via engine and calling engine.undo(),
+        // both engine.read() and engine.replay_hash() must match the pre-dispatch snapshot.
+        #[test]
+        fn prop_per_die_undo(op in valid_move_op_strategy()) {
+            let mut engine = Engine::<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority>::new(BgState::new());
+            engine.add_rule(RollDiceRule, RuleLifetime::Permanent);
+            engine.add_rule(MoveRule, RuleLifetime::Permanent);
+
+            // First roll dice (non-undoable — sets up dice state)
+            {
+                let mut tx = Transaction::new();
+                tx.irreversible = false;
+                engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 }, tx);
+            }
+
+            let state_before = engine.read();
+            let hash_before = engine.replay_hash();
+
+            // Dispatch a Move using the generated op's from/to/die_index.
+            if let BackgammonOp::MoveOp { from, to, die_index, .. } = op {
+                // Guard: the source point must have a White checker.
+                // Some generated (from, distance) pairs may have from > 0 but
+                // saturating_sub brings to to 0 or the point may be empty.
+                prop_assume!(state_before.board[from] > 0);
+
+                engine.dispatch(
+                    BackgammonEvent::Move { from, to, die_index },
+                    Transaction::new(),
+                );
+                engine.undo();
+
+                // Both state and replay_hash must match the pre-dispatch snapshot.
+                prop_assert_eq!(engine.read(), state_before);
+                prop_assert_eq!(engine.replay_hash(), hash_before);
+            }
+        }
     }
 }
