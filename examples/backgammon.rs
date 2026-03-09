@@ -341,7 +341,11 @@ enum BackgammonEvent {
     RollDice { d1: u8, d2: u8 },
     /// Move a checker from `from` to `to` using a specific die.
     /// MoveRule inspects state to determine the correct op variant.
-    Move { from: usize, to: usize, die_index: usize },
+    Move {
+        from: usize,
+        to: usize,
+        die_index: usize,
+    },
 }
 
 //
@@ -400,7 +404,12 @@ impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for MoveRu
         event: &mut BackgammonEvent,
         tx: &mut Transaction<BackgammonOp>,
     ) {
-        if let BackgammonEvent::Move { from, to, die_index } = event {
+        if let BackgammonEvent::Move {
+            from,
+            to,
+            die_index,
+        } = event
+        {
             let from = *from;
             let to = *to;
             let die_index = *die_index;
@@ -425,8 +434,8 @@ impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for MoveRu
                 }
             } else {
                 // Normal move: check if there's an opposing blot on `to`
-                let captured = state.board[to] * player_sign < 0
-                    && state.board[to].unsigned_abs() == 1;
+                let captured =
+                    state.board[to] * player_sign < 0 && state.board[to].unsigned_abs() == 1;
                 BackgammonOp::MoveOp {
                     from,
                     to,
@@ -451,9 +460,8 @@ impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for MoveRu
 //
 
 fn main() {
-    let mut engine = Engine::<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority>::new(
-        BgState::new(),
-    );
+    let mut engine =
+        Engine::<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority>::new(BgState::new());
     engine.add_rule(RollDiceRule, RuleLifetime::Permanent);
     engine.add_rule(MoveRule, RuleLifetime::Permanent);
 
@@ -471,7 +479,11 @@ fn main() {
     // MoveRule creates MoveOp and pushes a CommitFrame — this Move is undoable.
     println!("Moving checker from point 8 to point 5 (die 0, value 3)");
     engine.dispatch(
-        BackgammonEvent::Move { from: 7, to: 4, die_index: 0 },
+        BackgammonEvent::Move {
+            from: 7,
+            to: 4,
+            die_index: 0,
+        },
         Transaction::new(),
     );
     println!("{}", engine.state);
@@ -480,7 +492,11 @@ fn main() {
     // Another checker from point 8 (index 7) to point 3 (index 2).
     println!("Moving checker from point 8 to point 3 (die 1, value 5)");
     engine.dispatch(
-        BackgammonEvent::Move { from: 7, to: 2, die_index: 1 },
+        BackgammonEvent::Move {
+            from: 7,
+            to: 2,
+            die_index: 1,
+        },
         Transaction::new(),
     );
     let state_before_undo = engine.read();
@@ -571,7 +587,7 @@ mod tests {
             dice_used: [false, false],
         };
         // Set up: White on point 20, Black blot on point 19
-        state.board[20] = 1;  // White checker
+        state.board[20] = 1; // White checker
         state.board[19] = -1; // Black blot
         let before = state.clone();
 
@@ -585,9 +601,9 @@ mod tests {
         let count_before = checker_count(&state);
         op.apply(&mut state);
         // White now on 19, Black blot sent to bar
-        assert_eq!(state.board[19], 1);   // White on destination
-        assert_eq!(state.board[20], 0);   // Source cleared
-        assert_eq!(state.board[25], -1);  // Black's bar got one checker (negative)
+        assert_eq!(state.board[19], 1); // White on destination
+        assert_eq!(state.board[20], 0); // Source cleared
+        assert_eq!(state.board[25], -1); // Black's bar got one checker (negative)
         assert_eq!(state.dice_used[1], true);
         assert_eq!(checker_count(&state), count_before);
 
@@ -620,8 +636,8 @@ mod tests {
             player_sign: 1, // White
         };
         op.apply(&mut state);
-        assert_eq!(state.board[24], 0);  // Removed from bar
-        assert_eq!(state.board[2], 1);   // Placed on board
+        assert_eq!(state.board[24], 0); // Removed from bar
+        assert_eq!(state.board[2], 1); // Placed on board
         assert_eq!(state.dice_used[0], true);
         assert_eq!(checker_count(&state), count_before);
 
@@ -653,8 +669,8 @@ mod tests {
             player_sign: 1, // White
         };
         op.apply(&mut state);
-        assert_eq!(state.board[1], 0);    // Removed from board
-        assert_eq!(state.white_home, 1);  // White home incremented
+        assert_eq!(state.board[1], 0); // Removed from board
+        assert_eq!(state.white_home, 1); // White home incremented
         assert_eq!(state.dice_used[0], true);
         // board[26] does not exist — we only use board[0..=25]
         assert_eq!(checker_count(&state), count_before);
@@ -685,8 +701,8 @@ mod tests {
             player_sign: -1, // Black
         };
         op.apply(&mut state);
-        assert_eq!(state.board[22], 0);   // Removed from board
-        assert_eq!(state.black_home, 1);  // Black home incremented
+        assert_eq!(state.board[22], 0); // Removed from board
+        assert_eq!(state.black_home, 1); // Black home incremented
         assert_eq!(state.dice_used[1], true);
         assert_eq!(checker_count(&state), count_before);
 

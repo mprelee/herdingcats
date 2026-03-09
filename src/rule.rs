@@ -75,12 +75,7 @@ where
     ///     }
     /// }
     /// ```
-    fn before(
-        &self,
-        _state: &S,
-        _event: &mut E,
-        _tx: &mut Transaction<O>,
-    ) {}
+    fn before(&self, _state: &S, _event: &mut E, _tx: &mut Transaction<O>) {}
 
     /// Called once per dispatch, after all operations in the transaction have
     /// been applied to state.
@@ -115,12 +110,7 @@ where
     ///     }
     /// }
     /// ```
-    fn after(
-        &self,
-        _state: &S,
-        _event: &E,
-        _tx: &mut Transaction<O>,
-    ) {}
+    fn after(&self, _state: &S, _event: &E, _tx: &mut Transaction<O>) {}
 }
 
 // ============================================================

@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::hash::{fnv1a_hash, FNV_OFFSET, FNV_PRIME};
+use crate::hash::{FNV_OFFSET, FNV_PRIME, fnv1a_hash};
 use crate::operation::Operation;
 use crate::rule::Rule;
 use crate::transaction::{RuleLifetime, Transaction};
@@ -193,11 +193,8 @@ where
     /// let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
     /// engine.add_rule(NoRule, RuleLifetime::Permanent);
     /// ```
-    pub fn add_rule<R>(
-        &mut self,
-        rule: R,
-        lifetime: RuleLifetime,
-    ) where
+    pub fn add_rule<R>(&mut self, rule: R, lifetime: RuleLifetime)
+    where
         R: Rule<S, O, E, P> + 'static,
     {
         let id = rule.id();
@@ -335,9 +332,7 @@ where
             if self.enabled.contains(rule.id()) {
                 rule.before(&self.state, &mut event, &mut tx);
 
-                if let Some(RuleLifetime::Triggers(n)) =
-                    self.lifetimes.get_mut(rule.id())
-                {
+                if let Some(RuleLifetime::Triggers(n)) = self.lifetimes.get_mut(rule.id()) {
                     if *n > 0 {
                         *n -= 1;
                         if *n == 0 {
@@ -375,8 +370,7 @@ where
             for op in &tx.ops {
                 let h = fnv1a_hash(&op.hash_bytes());
                 self.replay_hash ^= h;
-                self.replay_hash =
-                    self.replay_hash.wrapping_mul(FNV_PRIME);
+                self.replay_hash = self.replay_hash.wrapping_mul(FNV_PRIME);
             }
 
             let hash_after = self.replay_hash;
@@ -787,14 +781,8 @@ mod props {
         fn priority(&self) -> u8 {
             0
         }
-        fn before(
-            &self,
-            _state: &i32,
-            _event: &mut (),
-            _tx: &mut Transaction<CounterOp>,
-        ) {
-            self.trigger_count
-                .set(self.trigger_count.get() + 1);
+        fn before(&self, _state: &i32, _event: &mut (), _tx: &mut Transaction<CounterOp>) {
+            self.trigger_count.set(self.trigger_count.get() + 1);
         }
     }
 

@@ -2,13 +2,13 @@
 
 //! herdingcats — a deterministic, undoable game-event engine.
 
+mod engine;
 mod hash;
 mod operation;
-mod transaction;
 mod rule;
-mod engine;
+mod transaction;
 
-pub use operation::Operation;
-pub use transaction::{RuleLifetime, Transaction};
-pub use rule::Rule;
 pub use engine::Engine;
+pub use operation::Operation;
+pub use rule::Rule;
+pub use transaction::{RuleLifetime, Transaction};

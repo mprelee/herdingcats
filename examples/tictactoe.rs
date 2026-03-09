@@ -148,12 +148,7 @@ impl Rule<Game, Op, GameEvent, GamePriority> for PlayRule {
         GamePriority::Default
     }
 
-    fn before(
-        &self,
-        state: &Game,
-        event: &mut GameEvent,
-        tx: &mut Transaction<Op>,
-    ) {
+    fn before(&self, state: &Game, event: &mut GameEvent, tx: &mut Transaction<Op>) {
         if state.winner.is_some() {
             tx.cancelled = true;
             return;
@@ -186,12 +181,7 @@ impl Rule<Game, Op, GameEvent, GamePriority> for WinRule {
         GamePriority::Default
     }
 
-    fn after(
-        &self,
-        state: &Game,
-        _event: &GameEvent,
-        tx: &mut Transaction<Op>,
-    ) {
+    fn after(&self, state: &Game, _event: &GameEvent, tx: &mut Transaction<Op>) {
         let lines = [
             [0, 1, 2],
             [3, 4, 5],
@@ -207,10 +197,7 @@ impl Rule<Game, Op, GameEvent, GamePriority> for WinRule {
             let [a, b, c] = line;
             let cells = [state.board[a], state.board[b], state.board[c]];
 
-            if cells[0] != Cell::Empty
-                && cells[0] == cells[1]
-                && cells[1] == cells[2]
-            {
+            if cells[0] != Cell::Empty && cells[0] == cells[1] && cells[1] == cells[2] {
                 let winner = match cells[0] {
                     Cell::X => Player::X,
                     Cell::O => Player::O,
@@ -255,8 +242,7 @@ impl fmt::Display for Game {
 //
 
 fn main() {
-    let mut engine =
-        Engine::<Game, Op, GameEvent, GamePriority>::new(Game::new());
+    let mut engine = Engine::<Game, Op, GameEvent, GamePriority>::new(Game::new());
 
     engine.add_rule(PlayRule, RuleLifetime::Permanent);
     engine.add_rule(WinRule, RuleLifetime::Permanent);
