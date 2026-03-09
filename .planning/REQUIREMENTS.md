@@ -20,10 +20,10 @@
 
 ### Engine Property Tests
 
-- [ ] **PROP-01**: Property test (proptest): arbitrary sequences of `apply` then `undo` return the original state AND the original `replay_hash` — not just state equality
-- [ ] **PROP-02**: Property test (proptest): `dispatch_preview` leaves all four engine mutable fields identical after return — `state`, `replay_hash`, `lifetimes`, `enabled` set
-- [ ] **PROP-03**: Property test (proptest): `RuleLifetime::Turns(n)` rule is disabled after exactly `n` dispatches; `RuleLifetime::Triggers(n)` rule is disabled after exactly `n` `before()` calls
-- [ ] **PROP-04**: Property test (proptest): a cancelled transaction (`tx.cancelled = true`) leaves `state` and `replay_hash` completely unchanged — verified by snapshot before and after dispatch
+- [x] **PROP-01**: Property test (proptest): arbitrary sequences of `apply` then `undo` return the original state AND the original `replay_hash` — not just state equality
+- [x] **PROP-02**: Property test (proptest): `dispatch_preview` leaves all four engine mutable fields identical after return — `state`, `replay_hash`, `lifetimes`, `enabled` set
+- [x] **PROP-03**: Property test (proptest): `RuleLifetime::Turns(n)` rule is disabled after exactly `n` dispatches; `RuleLifetime::Triggers(n)` rule is disabled after exactly `n` `before()` calls
+- [x] **PROP-04**: Property test (proptest): a cancelled transaction (`tx.cancelled = true`) leaves `state` and `replay_hash` completely unchanged — verified by snapshot before and after dispatch
 
 ### Backgammon Example
 
@@ -79,10 +79,10 @@
 | DOC-02 | Phase 1 | Complete |
 | DOC-03 | Phase 1 | Complete |
 | DOC-04 | Phase 1 | Complete |
-| PROP-01 | Phase 2 | Pending |
-| PROP-02 | Phase 2 | Pending |
-| PROP-03 | Phase 2 | Pending |
-| PROP-04 | Phase 2 | Pending |
+| PROP-01 | Phase 2 | Complete |
+| PROP-02 | Phase 2 | Complete |
+| PROP-03 | Phase 2 | Complete |
+| PROP-04 | Phase 2 | Complete |
 | BACK-01 | Phase 3 | Pending |
 | BACK-02 | Phase 3 | Pending |
 | BACK-03 | Phase 3 | Pending |

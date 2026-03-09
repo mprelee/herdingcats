@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: planning
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-09T03:54:20.759Z"
+stopped_at: Completed 02-engine-property-tests-01-PLAN.md
+last_updated: "2026-03-09T04:12:38.792Z"
 last_activity: 2026-03-08 — Roadmap created; phases derived from requirements
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 4
   percent: 0
 ---
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 01-module-split-and-foundation P01 | 8 | 2 tasks | 7 files |
 | Phase 01-module-split-and-foundation P02 | 2 | 2 tasks | 5 files |
 | Phase 01-module-split-and-foundation P03 | 12 | 2 tasks | 5 files |
+| Phase 02-engine-property-tests P01 | 8 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,10 @@ Recent decisions affecting current work:
 - [Phase 01-module-split-and-foundation]: CounterOp uses Reset{prior:i32} to store prior value so undo can restore exactly — makes undo correctness self-documenting in tests
 - [Phase 01-module-split-and-foundation]: Engine::new and Engine::read doctests must use a concrete Operation type — Infallible does not satisfy the Operation<S> bound
 - [Phase 01-module-split-and-foundation]: Doctest examples define inline toy types rather than importing test fixtures, keeping examples self-contained and public-API-only
+- [Phase 02-engine-property-tests]: CounterOp in mod props re-declares Inc/Dec only — Reset excluded to keep proptest strategies stateless
+- [Phase 02-engine-property-tests]: PROP-02 indirect isolation check: compare post-preview dispatch results against reference engine instead of inspecting private fields
+- [Phase 02-engine-property-tests]: PROP-03 uses Rc<Cell<u32>> trigger_count to observe CountingRule.before() calls without accessing private engine.enabled/lifetimes
+- [Phase 02-engine-property-tests]: PROP-04 uses NoRule/Permanent — asserts state+hash only, avoids Turns unconditional-decrement edge case on cancelled dispatch
 
 ### Pending Todos
 
@@ -83,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-09T03:54:20.756Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-engine-property-tests/02-CONTEXT.md
+Last session: 2026-03-09T04:12:38.790Z
+Stopped at: Completed 02-engine-property-tests-01-PLAN.md
+Resume file: None
