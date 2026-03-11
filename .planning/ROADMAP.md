@@ -1,8 +1,9 @@
-# Roadmap: herdingcats — Refactor & Test
+# Roadmap: herdingcats — Rename & Reversibility
 
 ## Milestones
 
 - ✅ **v1.0 Refactor and Test** — Phases 1-3 (shipped 2026-03-09)
+- 🚧 **v1.1 Rename & Reversibility** — Phases 4-7 (in progress)
 
 ## Phases
 
@@ -17,6 +18,75 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 </details>
 
+### 🚧 v1.1 Rename & Reversibility (In Progress)
+
+**Milestone Goal:** Refine the public API naming and reversibility model to better reflect Mealy/Moore state machine design intent for turn-based games.
+
+- [ ] **Phase 4: Core Rename** - Rename Operation→Mutation, Rule→Behavior, Transaction→Action; remove RuleLifetime; all names consistent across codebase
+- [ ] **Phase 5: Reversibility and Behavior Lifecycle** - Add is_reversible() to Mutation, derive Action reversibility, enforce undo barrier, add is_active/on_dispatch/on_undo to Behavior
+- [ ] **Phase 6: Tests and Examples** - Proptest coverage for new reversibility model, stateful behavior unit test, update both examples to compile and run under new API
+- [ ] **Phase 7: Documentation and Extended Tests** - Comprehensive rustdoc for all renamed types and new lifecycle methods; extended unit tests covering edge cases in reversibility and behavior lifecycle
+
+## Phase Details
+
+### Phase 4: Core Rename
+**Goal**: All public API names accurately reflect state machine semantics — Mutation, Behavior, Action replace Operation, Rule, Transaction throughout the codebase
+**Depends on**: Phase 3 (v1.0 complete)
+**Requirements**: REN-01, REN-02, REN-03, REN-04
+**Success Criteria** (what must be TRUE):
+  1. `cargo build` succeeds with no warnings — `Mutation<S>`, `Behavior<S,M,I,P>`, `Action<M>` are the public names in lib.rs re-exports
+  2. `cargo test` passes — all unit tests and doctests reference new names with no compilation errors
+  3. `cargo run --example tictactoe` and `cargo run --example backgammon` compile and run without behavioral changes
+  4. `RuleLifetime` no longer appears anywhere in the public API or source (dead code eliminated)
+**Plans**: TBD
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 4 to break down)
+
+### Phase 5: Reversibility and Behavior Lifecycle
+**Goal**: Mutations self-report reversibility, Actions derive their reversibility from mutations at commit time, irreversible commits clear the undo stack, and Behaviors self-manage their own lifecycle via is_active/on_dispatch/on_undo hooks
+**Depends on**: Phase 4
+**Requirements**: REV-01, REV-02, REV-03, REV-04, LIFE-01, LIFE-02, LIFE-03, LIFE-04, LIFE-05, LIFE-06
+**Success Criteria** (what must be TRUE):
+  1. A `Mutation` implementation can override `is_reversible()` to return `false`; an `Action` containing that mutation is treated as irreversible by the engine
+  2. After committing an irreversible `Action`, `engine.undo()` returns an error or no-op — the undo stack is empty
+  3. Reversible `Action`s committed after an irreversible one are individually undoable; the undo stack empties when the barrier is reached
+  4. `engine.add_behavior(b)` replaces `engine.add_rule(b, lifetime)` — no lifetime parameter required; behaviors with `is_active() = false` are skipped per dispatch
+  5. `on_dispatch()` and `on_undo()` are called on all behaviors after state mutations are applied — behaviors can update internal counters without borrow conflicts
+**Plans**: TBD
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 5 to break down)
+
+### Phase 6: Tests and Examples
+**Goal**: The new reversibility model and behavior lifecycle are verified by property-based and unit tests; both examples compile and run correctly under the final v1.1 API
+**Depends on**: Phase 5
+**Requirements**: TEST-01, TEST-02, TEST-03, TEST-04, TEST-05, TEST-06
+**Success Criteria** (what must be TRUE):
+  1. `cargo test` passes — all existing tests updated to new names, no failures
+  2. New proptest verifies: any `Action` with an irreversible mutation results in an empty undo stack after commit
+  3. New proptest verifies: reversible `Action`s after an irreversible commit are individually undoable; undo halts at the barrier
+  4. New unit test verifies: a stateful `Behavior` using `on_dispatch` counter deactivates after N dispatches (replaces RuleLifetime::Turns proptest)
+  5. `cargo run --example backgammon` runs correctly with dice roll mutation returning `is_reversible() = false` and `RollDiceRule` using `on_dispatch`/`is_active`
+**Plans**: TBD
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 6 to break down)
+
+### Phase 7: Documentation and Extended Tests
+**Goal**: Comprehensive rustdoc for all renamed types and new lifecycle methods; extended unit tests covering edge cases in reversibility and behavior lifecycle
+**Depends on**: Phase 6
+**Requirements**: DOC-01, DOC-02, DOC-03, TEST-07, TEST-08
+**Success Criteria** (what must be TRUE):
+  1. `cargo doc --no-deps` completes with zero warnings — all public types (`Mutation<S>`, `Behavior<S,M,I,P>`, `Action<M>`, `Engine<S,M,I,P>`) and all new trait methods (`is_reversible`, `is_active`, `on_dispatch`, `on_undo`) have rustdoc with Mealy/Moore framing in module-level prose
+  2. `cargo test --doc` passes — runnable doctests on all new trait methods execute correctly and demonstrate expected usage
+  3. `cargo test` passes with new unit tests for reversibility edge cases: empty `Action` (no mutations) is reversible; `Action` where all mutations are irreversible clears the undo stack; `Action` with mixed mutations (some reversible, some not) is treated as irreversible
+  4. `cargo test` passes with new unit tests for behavior lifecycle edge cases: `is_active() = false` skips `before`/`after` hooks; `on_undo()` fires when a reversible action is undone; a behavior that deactivates during a dispatch sequence does not corrupt already-queued hooks
+**Plans**: TBD
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 7 to break down)
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -24,13 +94,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 | 1. Module Split and Foundation | v1.0 | 3/3 | Complete | 2026-03-09 |
 | 2. Engine Property Tests | v1.0 | 1/1 | Complete | 2026-03-09 |
 | 3. Backgammon Example and Integration Properties | v1.0 | 2/2 | Complete | 2026-03-09 |
-
-### Phase 1: Add checks for clippy and cargo fmt, etc
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 0
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 1 to break down)
+| 4. Core Rename | v1.1 | 0/TBD | Not started | - |
+| 5. Reversibility and Behavior Lifecycle | v1.1 | 0/TBD | Not started | - |
+| 6. Tests and Examples | v1.1 | 0/TBD | Not started | - |
+| 7. Documentation and Extended Tests | v1.1 | 0/TBD | Not started | - |

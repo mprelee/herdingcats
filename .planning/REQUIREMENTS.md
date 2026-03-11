@@ -39,6 +39,17 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 - [ ] **TEST-05**: `examples/backgammon.rs` updated — dice roll mutation returns `is_reversible() = false`; `RollDiceRule` uses `on_dispatch`/`is_active` instead of `RuleLifetime`; compiles and passes
 - [ ] **TEST-06**: `examples/tictactoe.rs` updated to new names; compiles and runs unchanged
 
+### Documentation
+
+- [ ] **DOC-01**: All public types — `Mutation<S>`, `Behavior<S,M,I,P>`, `Action<M>`, `Engine<S,M,I,P>` — have comprehensive rustdoc explaining their role in the state machine model, with usage guidance
+- [ ] **DOC-02**: All new trait methods (`is_reversible`, `is_active`, `on_dispatch`, `on_undo`) have doc comments with runnable doctests demonstrating correct usage
+- [ ] **DOC-03**: `cargo doc --no-deps` generates zero warnings; module-level prose updated to reflect Mealy/Moore state machine framing
+
+### Extended Tests
+
+- [ ] **TEST-07**: Unit tests for reversibility edge cases — empty `Action` (no mutations) is reversible; Action where all mutations are irreversible clears undo stack; Action with mixed mutations (some `is_reversible() = true`, some `false`) is treated as irreversible
+- [ ] **TEST-08**: Unit tests for behavior lifecycle edge cases — `is_active() = false` skips `before`/`after` hooks; `on_undo()` called correctly when undoing; behavior deactivating during a dispatch sequence doesn't affect already-queued hooks
+
 ## v2 Requirements
 
 ### Output / Event Emission
@@ -60,32 +71,37 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REN-01 | — | Pending |
-| REN-02 | — | Pending |
-| REN-03 | — | Pending |
-| REN-04 | — | Pending |
-| REV-01 | — | Pending |
-| REV-02 | — | Pending |
-| REV-03 | — | Pending |
-| REV-04 | — | Pending |
-| LIFE-01 | — | Pending |
-| LIFE-02 | — | Pending |
-| LIFE-03 | — | Pending |
-| LIFE-04 | — | Pending |
-| LIFE-05 | — | Pending |
-| LIFE-06 | — | Pending |
-| TEST-01 | — | Pending |
-| TEST-02 | — | Pending |
-| TEST-03 | — | Pending |
-| TEST-04 | — | Pending |
-| TEST-05 | — | Pending |
-| TEST-06 | — | Pending |
+| REN-01 | Phase 4 | Pending |
+| REN-02 | Phase 4 | Pending |
+| REN-03 | Phase 4 | Pending |
+| REN-04 | Phase 4 | Pending |
+| REV-01 | Phase 5 | Pending |
+| REV-02 | Phase 5 | Pending |
+| REV-03 | Phase 5 | Pending |
+| REV-04 | Phase 5 | Pending |
+| LIFE-01 | Phase 5 | Pending |
+| LIFE-02 | Phase 5 | Pending |
+| LIFE-03 | Phase 5 | Pending |
+| LIFE-04 | Phase 5 | Pending |
+| LIFE-05 | Phase 5 | Pending |
+| LIFE-06 | Phase 5 | Pending |
+| TEST-01 | Phase 6 | Pending |
+| TEST-02 | Phase 6 | Pending |
+| TEST-03 | Phase 6 | Pending |
+| TEST-04 | Phase 6 | Pending |
+| TEST-05 | Phase 6 | Pending |
+| TEST-06 | Phase 6 | Pending |
+| DOC-01 | Phase 7 | Pending |
+| DOC-02 | Phase 7 | Pending |
+| DOC-03 | Phase 7 | Pending |
+| TEST-07 | Phase 7 | Pending |
+| TEST-08 | Phase 7 | Pending |
 
 **Coverage:**
-- v1.1 requirements: 20 total
-- Mapped to phases: 0
-- Unmapped: 20 ⚠️
+- v1.1 requirements: 25 total
+- Mapped to phases: 25
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after initial definition*
+*Last updated: 2026-03-10 after Phase 7 (docs + extended tests) added*
