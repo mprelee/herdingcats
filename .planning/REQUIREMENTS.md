@@ -36,8 +36,8 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 - [x] **TEST-02**: New proptest: any `Action` containing a mutation where `is_reversible() = false` results in an empty undo stack after commit
 - [x] **TEST-03**: New proptest: reversible `Action`s committed after an irreversible one are individually undoable; `engine.undo()` halts at the barrier (undo stack empty)
 - [x] **TEST-04**: New unit test: stateful `Behavior` using `on_dispatch` counter deactivates after N dispatches — replaces `RuleLifetime::Turns` proptest coverage
-- [ ] **TEST-05**: `examples/backgammon.rs` updated — dice roll mutation returns `is_reversible() = false`; `RollDiceRule` uses `on_dispatch`/`is_active` instead of `RuleLifetime`; compiles and passes
-- [ ] **TEST-06**: `examples/tictactoe.rs` updated to new names; compiles and runs unchanged
+- [x] **TEST-05**: `examples/backgammon.rs` updated — dice roll mutation returns `is_reversible() = false`; `RollDiceRule` uses `on_dispatch`/`is_active` instead of `RuleLifetime`; compiles and passes
+- [x] **TEST-06**: `examples/tictactoe.rs` updated to new names; compiles and runs unchanged
 
 ### Documentation
 
@@ -89,8 +89,8 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 | TEST-02 | Phase 6 | Complete |
 | TEST-03 | Phase 6 | Complete |
 | TEST-04 | Phase 6 | Complete |
-| TEST-05 | Phase 6 | Pending |
-| TEST-06 | Phase 6 | Pending |
+| TEST-05 | Phase 6 | Complete |
+| TEST-06 | Phase 6 | Complete |
 | DOC-01 | Phase 7 | Pending |
 | DOC-02 | Phase 7 | Pending |
 | DOC-03 | Phase 7 | Pending |

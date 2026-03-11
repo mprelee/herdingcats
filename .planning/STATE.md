@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Rename & Reversibility
 status: planning
-stopped_at: Completed 06-tests-and-examples-01-PLAN.md
-last_updated: "2026-03-11T02:37:01.255Z"
+stopped_at: Completed 06-02-PLAN.md
+last_updated: "2026-03-11T02:42:47.282Z"
 last_activity: 2026-03-10 — Phase 7 added; all 25/25 v1.1 requirements mapped across Phases 4-7
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
   percent: 0
 ---
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 05-reversibility-and-behavior-lifecycle P01 | 5 | 2 tasks | 2 files |
 | Phase 05-reversibility-and-behavior-lifecycle P02 | 3 | 2 tasks | 1 files |
 | Phase 06-tests-and-examples P01 | 2 | 3 tasks | 1 files |
+| Phase 06-tests-and-examples P02 | 4 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -84,6 +85,8 @@ Recent decisions affecting current work:
 - [Phase 06-tests-and-examples]: MixedOp in mod props is a separate flat enum (Rev/Irrev) not wrapping CounterOp — mod tests MixedOp not visible from sibling mod props
 - [Phase 06-tests-and-examples]: Rc<Cell<u32>> shared counter pattern for observing boxed behavior state from test scope after add_behavior moves it
 - [Phase 06-tests-and-examples]: prop_06 uses structured (prefix, suffix) strategy to guarantee Irrev barrier always present and state arithmetic verifiable
+- [Phase 06-02]: Used Engine::can_undo() and Engine::can_redo() public methods instead of accessing private undo_stack field for proptest barrier verification
+- [Phase 06-02]: tictactoe.rs needs no changes for TEST-06 — all v1.1 API names already present from Phase 4
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ None — v1.0 complete. v1.1 roadmap ready (Phases 4-7). Phase 4 unblocked.
 
 ## Session Continuity
 
-Last session: 2026-03-11T02:37:01.254Z
-Stopped at: Completed 06-tests-and-examples-01-PLAN.md
+Last session: 2026-03-11T02:42:47.280Z
+Stopped at: Completed 06-02-PLAN.md
 Resume file: None
