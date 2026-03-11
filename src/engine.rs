@@ -539,6 +539,56 @@ where
         self.redo_stack.clear();
         self.replay_hash = FNV_OFFSET;
     }
+
+    /// Return `true` if there is at least one commit on the undo stack.
+    ///
+    /// Returns `false` immediately after an irreversible commit (the undo
+    /// barrier), since `dispatch` clears the undo stack when the action
+    /// contains an irreversible mutation. Also returns `false` on a fresh
+    /// engine before any dispatches.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Mutation, Behavior, Action};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Mutation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    ///     fn is_reversible(&self) -> bool { false }
+    /// }
+    ///
+    /// struct NoRule;
+    /// impl Behavior<i32, CounterOp, (), u8> for NoRule {
+    ///     fn id(&self) -> &'static str { "no_rule" }
+    ///     fn priority(&self) -> u8 { 0 }
+    ///     fn before(&self, _s: &i32, _e: &mut (), tx: &mut Action<CounterOp>) {
+    ///         tx.mutations.push(CounterOp::Inc);
+    ///     }
+    /// }
+    ///
+    /// let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+    /// engine.add_behavior(NoRule);
+    /// assert!(!engine.can_undo());
+    ///
+    /// engine.dispatch((), Action::new());
+    /// // Irreversible commit — undo barrier clears the stack
+    /// assert!(!engine.can_undo());
+    /// ```
+    pub fn can_undo(&self) -> bool {
+        !self.undo_stack.is_empty()
+    }
+
+    /// Return `true` if there is at least one commit on the redo stack.
+    ///
+    /// Returns `false` on a fresh engine, after `write`, or after any new
+    /// forward `dispatch` (which clears the redo stack).
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
+    }
 }
 
 // ============================================================
@@ -1143,6 +1193,84 @@ mod props {
 
             prop_assert_eq!(engine.read(), state_before);
             prop_assert_eq!(engine.replay_hash(), hash_before);
+        }
+    }
+
+    // --------------------------------------------------------
+    // MixedOp fixture (for reversibility props)
+    // --------------------------------------------------------
+
+    #[derive(Clone, Debug)]
+    enum MixedOp {
+        Rev,
+        Irrev,
+    }
+
+    impl Mutation<i32> for MixedOp {
+        fn apply(&self, state: &mut i32) {
+            match self {
+                MixedOp::Rev => *state += 1,
+                MixedOp::Irrev => *state += 0, // no-op state change, just marks irreversibility
+            }
+        }
+        fn undo(&self, state: &mut i32) {
+            match self {
+                MixedOp::Rev => *state -= 1,
+                MixedOp::Irrev => {} // engine never calls this — barrier prevents it
+            }
+        }
+        fn hash_bytes(&self) -> Vec<u8> {
+            match self {
+                MixedOp::Rev => vec![0xAA],
+                MixedOp::Irrev => vec![0xFF],
+            }
+        }
+        fn is_reversible(&self) -> bool {
+            match self {
+                MixedOp::Rev => true,
+                MixedOp::Irrev => false,
+            }
+        }
+    }
+
+    struct MixedNoRule;
+    impl Behavior<i32, MixedOp, (), u8> for MixedNoRule {
+        fn id(&self) -> &'static str { "mixed_no_rule_props" }
+        fn priority(&self) -> u8 { 0 }
+    }
+
+    fn mixed_op_strategy() -> impl Strategy<Value = Vec<MixedOp>> {
+        prop::collection::vec(
+            prop_oneof![Just(MixedOp::Rev), Just(MixedOp::Irrev)],
+            1..=20, // at least 1 so the sequence is non-empty
+        )
+    }
+
+    // --------------------------------------------------------
+    // PROP-05: any action sequence containing an Irrev mutation
+    //          results in an empty undo stack after commit
+    // --------------------------------------------------------
+
+    proptest! {
+        #[test]
+        fn prop_05_irreversible_clears_undo_stack(ops in mixed_op_strategy()) {
+            // Only run this test when the sequence contains at least one Irrev
+            prop_assume!(ops.iter().any(|op| matches!(op, MixedOp::Irrev)));
+
+            let mut engine: Engine<i32, MixedOp, (), u8> = Engine::new(0i32);
+            engine.add_behavior(MixedNoRule);
+
+            for op in &ops {
+                let mut tx = Action::new();
+                tx.mutations.push(op.clone());
+                engine.dispatch((), tx);
+                if !op.is_reversible() {
+                    prop_assert!(engine.undo_stack.is_empty(),
+                        "undo stack must be empty immediately after irreversible commit");
+                    prop_assert!(engine.redo_stack.is_empty(),
+                        "redo stack must be empty immediately after irreversible commit");
+                }
+            }
         }
     }
 }
