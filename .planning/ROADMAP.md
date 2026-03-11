@@ -100,5 +100,5 @@ Plans:
 | 3. Backgammon Example and Integration Properties | v1.0 | 2/2 | Complete | 2026-03-09 |
 | 4. Core Rename | 4/4 | Complete   | 2026-03-11 | - |
 | 5. Reversibility and Behavior Lifecycle | 2/2 | Complete   | 2026-03-11 | - |
-| 6. Tests and Examples | 2/2 | Complete   | 2026-03-11 | - |
+| 6. Tests and Examples | 2/2 | Complete    | 2026-03-11 | - |
 | 7. Documentation and Extended Tests | v1.1 | 0/TBD | Not started | - |
