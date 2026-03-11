@@ -968,6 +968,115 @@ mod tests {
     }
 
     // --------------------------------------------------------
+    // Behavior lifecycle edge case tests (TEST-08)
+    // --------------------------------------------------------
+
+    #[test]
+    fn on_undo_fires_on_undo() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+
+        struct TrackingBehavior {
+            count: Rc<Cell<u32>>,
+        }
+        impl Behavior<i32, CounterOp, (), u8> for TrackingBehavior {
+            fn id(&self) -> &'static str {
+                "tracking"
+            }
+            fn priority(&self) -> u8 {
+                0
+            }
+            fn on_dispatch(&mut self) {
+                self.count.set(self.count.get() + 1);
+            }
+            fn on_undo(&mut self) {
+                self.count.set(self.count.get() - 1);
+            }
+        }
+
+        let counter = Rc::new(Cell::new(0u32));
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(TrackingBehavior {
+            count: counter.clone(),
+        });
+
+        // Dispatch one reversible action
+        let mut tx = Action::new();
+        tx.mutations.push(CounterOp::Inc);
+        engine.dispatch((), tx);
+        assert_eq!(counter.get(), 1, "on_dispatch should have fired once");
+        assert!(engine.can_undo());
+
+        // Undo — on_undo should fire, decrementing counter
+        engine.undo();
+        assert_eq!(counter.get(), 0, "on_undo should have decremented counter");
+        assert!(!engine.can_undo(), "undo stack empty after undo");
+        assert_eq!(engine.state, 0, "state restored after undo");
+    }
+
+    #[test]
+    fn deactivation_mid_dispatch_does_not_corrupt_hooks() {
+        // BehaviorA: starts active, deactivates on first on_dispatch call
+        struct SelfDeactivating {
+            active: bool,
+        }
+        impl Behavior<i32, CounterOp, (), u8> for SelfDeactivating {
+            fn id(&self) -> &'static str {
+                "self_deactivating"
+            }
+            fn priority(&self) -> u8 {
+                0
+            }
+            fn is_active(&self) -> bool {
+                self.active
+            }
+            fn on_dispatch(&mut self) {
+                self.active = false; // deactivate after first dispatch
+            }
+        }
+
+        // BehaviorB: always active, before() hook pushes an extra CounterOp::Inc
+        struct AlwaysActive;
+        impl Behavior<i32, CounterOp, (), u8> for AlwaysActive {
+            fn id(&self) -> &'static str {
+                "always_active"
+            }
+            fn priority(&self) -> u8 {
+                10
+            }
+            fn before(&self, _s: &i32, _e: &mut (), tx: &mut Action<CounterOp>) {
+                tx.mutations.push(CounterOp::Inc); // always injects one extra Inc
+            }
+        }
+
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(SelfDeactivating { active: true });
+        engine.add_behavior(AlwaysActive);
+
+        // First dispatch: both behaviors active. Action starts with one Inc.
+        // AlwaysActive.before() injects a second Inc → 2 mutations total → state = 2
+        let mut tx1 = Action::new();
+        tx1.mutations.push(CounterOp::Inc);
+        engine.dispatch((), tx1);
+        assert_eq!(
+            engine.state, 2,
+            "first dispatch: both behaviors active, AlwaysActive added one Inc"
+        );
+        // After dispatch: SelfDeactivating.on_dispatch fires → self.active = false
+
+        // Second dispatch: SelfDeactivating is now inactive (is_active() = false).
+        // AlwaysActive is still active → before() still injects one Inc.
+        // Action starts with one Inc → AlwaysActive adds one more → 2 mutations → state += 2 → state = 4
+        let mut tx2 = Action::new();
+        tx2.mutations.push(CounterOp::Inc);
+        engine.dispatch((), tx2);
+        assert_eq!(
+            engine.state, 4,
+            "second dispatch: AlwaysActive before() still fires after SelfDeactivating deactivated"
+        );
+    }
+
+    // --------------------------------------------------------
     // Stateful behavior lifecycle (TEST-04)
     // --------------------------------------------------------
 
