@@ -870,6 +870,95 @@ mod tests {
         assert_eq!(engine.state, 0);
         assert_eq!(engine.undo_stack.len(), 0);
     }
+
+    // --------------------------------------------------------
+    // Stateful behavior lifecycle (TEST-04)
+    // --------------------------------------------------------
+
+    #[test]
+    fn stateful_behavior_n_dispatches() {
+        use std::rc::Rc;
+        use std::cell::Cell;
+
+        struct CountingBehavior {
+            dispatch_count: Rc<Cell<u32>>,
+            active_for: u32,
+        }
+        impl Behavior<i32, CounterOp, (), u8> for CountingBehavior {
+            fn id(&self) -> &'static str { "counting" }
+            fn priority(&self) -> u8 { 0 }
+            fn is_active(&self) -> bool { self.dispatch_count.get() < self.active_for }
+            fn on_dispatch(&mut self) {
+                self.dispatch_count.set(self.dispatch_count.get() + 1);
+            }
+        }
+
+        struct CountingBehavior2 {
+            dispatch_count: Rc<Cell<u32>>,
+            active_for: u32,
+        }
+        impl Behavior<i32, CounterOp, (), u8> for CountingBehavior2 {
+            fn id(&self) -> &'static str { "counting2" }
+            fn priority(&self) -> u8 { 0 }
+            fn is_active(&self) -> bool { self.dispatch_count.get() < self.active_for }
+            fn on_dispatch(&mut self) {
+                self.dispatch_count.set(self.dispatch_count.get() + 1);
+            }
+            fn before(&self, _s: &i32, _e: &mut (), tx: &mut Action<CounterOp>) {
+                // While active, add a Dec to cancel out Inc so net state change = 0
+                tx.mutations.push(CounterOp::Dec);
+            }
+        }
+
+        for n in 1u32..=10 {
+            // --- Assertion 1: on_dispatch fires even after deactivation ---
+            let dispatch_count = Rc::new(Cell::new(0u32));
+
+            let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+            engine.add_behavior(CountingBehavior {
+                dispatch_count: dispatch_count.clone(),
+                active_for: n,
+            });
+
+            for _ in 0..(n + 2) {
+                let mut tx = Action::new();
+                tx.mutations.push(CounterOp::Inc);
+                engine.dispatch((), tx);
+            }
+
+            // on_dispatch fires on ALL behaviors regardless of is_active()
+            assert_eq!(
+                dispatch_count.get(),
+                n + 2,
+                "dispatch_count should be n+2 for n={n}: on_dispatch must fire even after deactivation"
+            );
+
+            // --- Assertion 2: before/after hooks skipped when inactive ---
+            let dispatch_count2 = Rc::new(Cell::new(0u32));
+
+            let mut engine2: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+            engine2.add_behavior(CountingBehavior2 {
+                dispatch_count: dispatch_count2.clone(),
+                active_for: n,
+            });
+
+            // Dispatch n+1 actions each with CounterOp::Inc
+            for _ in 0..(n + 1) {
+                let mut tx = Action::new();
+                tx.mutations.push(CounterOp::Inc);
+                engine2.dispatch((), tx);
+            }
+
+            // During first n dispatches: CountingBehavior2 is active → adds Dec → net 0 each time
+            // State after n dispatches = 0 (each Inc + Dec cancels out)
+            // On dispatch n+1: CountingBehavior2 is inactive → before() skipped → only Inc applied → state = 1
+            assert_eq!(
+                engine2.state,
+                1,
+                "before() hook should be skipped after n={n} dispatches; state should be 1 (only Inc, no Dec)"
+            );
+        }
+    }
 }
 
 // ============================================================
