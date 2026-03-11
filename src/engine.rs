@@ -1273,4 +1273,83 @@ mod props {
             }
         }
     }
+
+    fn reversible_irrev_reversible_strategy()
+        -> impl Strategy<Value = (Vec<MixedOp>, Vec<MixedOp>)>
+    {
+        (
+            // prefix: 0..=5 Rev ops (dispatched before the Irrev)
+            prop::collection::vec(Just(MixedOp::Rev), 0..=5usize),
+            // suffix: 1..=5 Rev ops (dispatched after the Irrev)
+            prop::collection::vec(Just(MixedOp::Rev), 1..=5usize),
+        )
+    }
+
+    // --------------------------------------------------------
+    // PROP-06: reversible actions committed after an irreversible
+    //          one are individually undoable; undo halts at barrier
+    // --------------------------------------------------------
+
+    proptest! {
+        #[test]
+        fn prop_06_reversible_after_irreversible_undoable(
+            (prefix, suffix) in reversible_irrev_reversible_strategy()
+        ) {
+            let mut engine: Engine<i32, MixedOp, (), u8> = Engine::new(0i32);
+            engine.add_behavior(MixedNoRule);
+
+            // Dispatch prefix (all reversible)
+            for op in &prefix {
+                let mut tx = Action::new();
+                tx.mutations.push(op.clone());
+                engine.dispatch((), tx);
+            }
+
+            // Dispatch one irreversible — this sets the undo barrier
+            {
+                let mut tx = Action::new();
+                tx.mutations.push(MixedOp::Irrev);
+                engine.dispatch((), tx);
+            }
+            prop_assert!(engine.undo_stack.is_empty(), "undo stack empty after barrier");
+
+            // Dispatch suffix (all reversible)
+            for op in &suffix {
+                let mut tx = Action::new();
+                tx.mutations.push(op.clone());
+                engine.dispatch((), tx);
+            }
+
+            // Undo stack has exactly suffix.len() frames
+            prop_assert_eq!(engine.undo_stack.len(), suffix.len(),
+                "undo stack should contain only the suffix reversible commits");
+
+            // Record state and hash after barrier + suffix
+            let state_after_suffix = engine.read();
+
+            // Undo each suffix op individually — state and hash should unwind correctly
+            for i in 0..suffix.len() {
+                prop_assert!(!engine.undo_stack.is_empty(),
+                    "undo stack should not be empty before undoing suffix op {i}");
+                engine.undo();
+            }
+
+            // After undoing all suffix: undo stack is empty (barrier reached)
+            prop_assert!(engine.undo_stack.is_empty(),
+                "undo stack should be empty after undoing all suffix ops (barrier reached)");
+
+            let state_at_barrier = engine.read();
+            let hash_at_barrier = engine.replay_hash();
+            engine.undo(); // extra undo on empty stack — must be no-op
+            prop_assert_eq!(engine.read(), state_at_barrier);
+            prop_assert_eq!(engine.replay_hash(), hash_at_barrier);
+
+            // Rev applies +1 to state, so state_after_suffix = state_at_barrier + suffix.len() as i32
+            prop_assert_eq!(
+                state_after_suffix,
+                state_at_barrier + suffix.len() as i32,
+                "state at barrier + suffix.len() should equal state after suffix"
+            );
+        }
+    }
 }
