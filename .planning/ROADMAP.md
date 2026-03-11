@@ -55,10 +55,11 @@ Plans:
   3. Reversible `Action`s committed after an irreversible one are individually undoable; the undo stack empties when the barrier is reached
   4. `engine.add_behavior(b)` replaces `engine.add_rule(b, lifetime)` — no lifetime parameter required; behaviors with `is_active() = false` are skipped per dispatch
   5. `on_dispatch()` and `on_undo()` are called on all behaviors after state mutations are applied — behaviors can update internal counters without borrow conflicts
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 5 to break down)
+- [ ] 05-01-PLAN.md — Add is_reversible() to Mutation; add is_active/on_dispatch/on_undo to Behavior
+- [ ] 05-02-PLAN.md — Rewrite engine.rs: remove dead code, add reversibility gate, add lifecycle passes
 
 ### Phase 6: Tests and Examples
 **Goal**: The new reversibility model and behavior lifecycle are verified by property-based and unit tests; both examples compile and run correctly under the final v1.1 API
@@ -97,6 +98,6 @@ Plans:
 | 2. Engine Property Tests | v1.0 | 1/1 | Complete | 2026-03-09 |
 | 3. Backgammon Example and Integration Properties | v1.0 | 2/2 | Complete | 2026-03-09 |
 | 4. Core Rename | 4/4 | Complete   | 2026-03-11 | - |
-| 5. Reversibility and Behavior Lifecycle | v1.1 | 0/TBD | Not started | - |
+| 5. Reversibility and Behavior Lifecycle | v1.1 | 0/2 | Not started | - |
 | 6. Tests and Examples | v1.1 | 0/TBD | Not started | - |
 | 7. Documentation and Extended Tests | v1.1 | 0/TBD | Not started | - |
