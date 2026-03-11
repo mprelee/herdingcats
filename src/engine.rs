@@ -14,8 +14,6 @@ use crate::action::Action;
 #[derive(Clone, Copy, Debug)]
 enum RuleLifetime {
     Permanent,
-    Turns(u32),
-    Triggers(u32),
 }
 
 // A single entry on the undo stack, capturing everything needed to reverse
@@ -298,8 +296,8 @@ where
     /// Behaviors fire in ascending priority order during `before()`, then
     /// descending order during `after()`. If any behavior sets `tx.cancelled =
     /// true`, the mutations are not applied and no frame is committed.
-    /// Internal behavior lifetimes ([`Turns`](RuleLifetime::Turns),
-    /// [`Triggers`](RuleLifetime::Triggers)) are decremented here.
+    /// Behavior lifetimes are managed per-dispatch (all behaviors registered
+    /// with `add_behavior` are permanently enabled until explicitly removed).
     ///
     /// # Examples
     ///
@@ -337,15 +335,6 @@ where
         for behavior in &self.behaviors {
             if self.enabled.contains(behavior.id()) {
                 behavior.before(&self.state, &mut event, &mut tx);
-
-                if let Some(RuleLifetime::Triggers(n)) = self.lifetimes.get_mut(behavior.id())
-                    && *n > 0
-                {
-                    *n -= 1;
-                    if *n == 0 {
-                        self.enabled.remove(behavior.id());
-                    }
-                }
             }
         }
 
@@ -358,17 +347,6 @@ where
         for behavior in self.behaviors.iter().rev() {
             if self.enabled.contains(behavior.id()) {
                 behavior.after(&self.state, &event, &mut tx);
-            }
-        }
-
-        for (id, lifetime) in self.lifetimes.iter_mut() {
-            if let RuleLifetime::Turns(n) = lifetime
-                && *n > 0
-            {
-                *n -= 1;
-                if *n == 0 {
-                    self.enabled.remove(id);
-                }
             }
         }
 
