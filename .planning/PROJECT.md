@@ -1,8 +1,17 @@
-# herdingcats — Refactor & Test
+# herdingcats — Rename & Reversibility
+
+## Current Milestone: v1.1 Rename & Reversibility
+
+**Goal:** Refine the public API naming and reversibility model to better reflect the Mealy/Moore state machine design intent for turn-based games.
+
+**Target features:**
+- Rename `Operation→Mutation`, `Rule→Behavior`, `Transaction→Action`; remove `RuleLifetime`
+- Per-mutation reversibility (`is_reversible()`) with undo barrier on irreversible commits
+- Self-managing behavior lifecycle (`is_active`, `on_dispatch`, `on_undo`) replacing external `RuleLifetime` enum
 
 ## What This Is
 
-`herdingcats` is a published Rust library crate providing a generic, trait-driven rule orchestration engine for turn-based games. It exposes `Engine<S, O, E, P>`, which manages state mutation, undo/redo, rule lifecycle, and replay hashing. The codebase is now a properly structured multi-module crate (`hash`, `operation`, `transaction`, `rule`, `engine`) with full rustdoc, 19 unit tests, 5 proptest property tests, and two runnable examples (tictactoe and backgammon).
+`herdingcats` is a published Rust library crate providing a generic, trait-driven state machine engine for turn-based games. It exposes `Engine<S, M, I, P>`, which manages state mutation via `Behavior`s, undo/redo with reversibility barriers, behavior lifecycle, and replay hashing. The codebase is a properly structured multi-module crate with full rustdoc, unit tests, proptest property tests, and two runnable examples (tictactoe and backgammon).
 
 ## Core Value
 
@@ -30,7 +39,11 @@ The engine's determinism and undo/redo correctness must be provably sound — pr
 
 ### Active
 
-(None — v1.0 complete. Use `/gsd:new-milestone` to define next milestone goals.)
+- [ ] `Mutation<S>` trait — `apply`, `undo`, `hash_bytes`, `is_reversible()` — v1.1
+- [ ] `Behavior<S,M,I,P>` trait — `before`/`after` hooks, `is_active`, `on_dispatch`, `on_undo` — v1.1
+- [ ] `Action<M>` — batches mutations, derived reversibility, `deterministic`, `cancelled` — v1.1
+- [ ] Undo barrier: irreversible `Action` clears undo stack — v1.1
+- [ ] Self-managing behavior lifecycle replaces `RuleLifetime` enum — v1.1
 
 ### Out of Scope
 
@@ -52,8 +65,8 @@ The engine's determinism and undo/redo correctness must be provably sound — pr
 ## Constraints
 
 - **Tech stack**: Rust only — no new runtime dependencies beyond proptest dev-dep
-- **API stability**: Public API surface must remain identical (lib.rs re-exports everything currently public)
-- **Existing example**: `examples/tictactoe.rs` must continue to compile and run unchanged
+- **API stability**: v1.1 is a intentional breaking rename — semver minor bump; all public names change
+- **Existing examples**: `examples/tictactoe.rs` and `examples/backgammon.rs` must compile and run under new names
 
 ## Key Decisions
 
@@ -67,6 +80,9 @@ The engine's determinism and undo/redo correctness must be provably sound — pr
 | BearOffOp as dedicated variant vs sentinel encoding in `to` field | Avoid out-of-bounds panic on `board[26]` | ✓ Good — explicit variant makes undo logic unambiguous |
 | Op-level proptest generation (BACK-05) | Bypass rule system for board conservation test | ✓ Good — simpler strategies, conservation doesn't require game-legality |
 | `tx.irreversible` naming | Pre-existing: `true` = "put on undo stack", `false` = "skip stack" | ⚠️ Revisit — name reads opposite to behavioral effect; candidate for rename in v2 |
+| Rename Operation→Mutation, Rule→Behavior, Transaction→Action | `Transaction`/`Operation` semantically overlap; `Rule` conflicts with PEG parser terminology (future `pest` integration planned) | — Pending |
+| Remove `RuleLifetime` enum; behaviors self-manage lifecycle | Allows arbitrary state (charges, toggles, counters) without engine coupling; `on_dispatch`/`on_undo`/`is_active` default methods keep simple cases zero-cost | — Pending |
+| Undo barrier: irreversible action clears undo stack | Matches Mealy machine semantics — irreversible inputs (drawing a card) commit prior history; models "publicly visible information" boundary cleanly | — Pending |
 
 ---
-*Last updated: 2026-03-09 after v1.0 milestone*
+*Last updated: 2026-03-10 after v1.1 milestone started*

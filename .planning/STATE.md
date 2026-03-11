@@ -1,33 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: Milestone shipped
-stopped_at: Completed quick-1-add-clippy-fmt-ci-checks-1-PLAN.md
-last_updated: "2026-03-09T08:37:25.188Z"
-last_activity: 2026-03-09 — v1.0 milestone archived
+milestone: v1.1
+milestone_name: Rename & Reversibility
+status: Defining requirements
+stopped_at: —
+last_updated: "2026-03-10T00:00:00.000Z"
+last_activity: 2026-03-10 — Milestone v1.1 started
 progress:
-  total_phases: 2
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-09 after v1.0 milestone)
+See: .planning/PROJECT.md (updated 2026-03-10 after v1.1 milestone started)
 
 **Core value:** The engine's determinism and undo/redo correctness must be provably sound — property-based tests using proptest make this machine-verifiable, not just manually checked.
-**Current focus:** v1.0 milestone complete — planning next milestone
+**Current focus:** v1.1 — Rename & Reversibility Refinement
 
 ## Current Position
 
-Phase: v1.0 complete (3/3 phases, 6/6 plans)
-Status: Milestone shipped
-Last activity: 2026-03-09 — v1.0 milestone archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-10 — Milestone v1.1 started
 
 Progress: [██████████] 100%
 
