@@ -831,6 +831,52 @@ mod tests {
         assert_eq!(engine.undo_stack.len(), 0); // barrier reached
     }
 
+    #[test]
+    fn mixed_mutations_treated_as_irreversible() {
+        let mut engine: Engine<i32, MixedOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(MixedNoRule);
+
+        // Step A: dispatch a reversible-only action first
+        let mut tx1 = Action::new();
+        tx1.mutations.push(MixedOp::Rev(CounterOp::Inc));
+        engine.dispatch((), tx1);
+        assert_eq!(engine.state, 1);
+        assert_eq!(engine.undo_stack.len(), 1);
+
+        // Step B: dispatch a mixed action (Rev + Irrev in same action)
+        // Rev(Inc) runs first: 1+1=2, then Irrev: state=99
+        let mut tx2 = Action::new();
+        tx2.mutations.push(MixedOp::Rev(CounterOp::Inc));
+        tx2.mutations.push(MixedOp::Irrev);
+        engine.dispatch((), tx2);
+        assert_eq!(engine.state, 99);
+        assert!(
+            !engine.can_undo(),
+            "mixed action must be treated as irreversible"
+        );
+        assert_eq!(
+            engine.undo_stack.len(),
+            0,
+            "undo stack must be cleared by mixed action (barrier consequence)"
+        );
+    }
+
+    #[test]
+    fn empty_action_does_not_push_undo_stack() {
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(NoRule);
+
+        // Dispatch with no mutations
+        let tx = Action::new();
+        engine.dispatch((), tx);
+
+        assert_eq!(engine.state, 0);
+        assert!(
+            !engine.can_undo(),
+            "empty action must not push to undo stack"
+        );
+    }
+
     // --------------------------------------------------------
     // Lifecycle hook tests (LIFE-04, LIFE-05, LIFE-06)
     // --------------------------------------------------------
