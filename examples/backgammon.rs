@@ -1,4 +1,5 @@
 #![allow(clippy::enum_variant_names)]
+#[allow(clippy::match_like_matches_macro)]
 use herdingcats::*;
 use std::fmt;
 
