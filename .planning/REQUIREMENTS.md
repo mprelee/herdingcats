@@ -41,9 +41,9 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 
 ### Documentation
 
-- [ ] **DOC-01**: All public types — `Mutation<S>`, `Behavior<S,M,I,P>`, `Action<M>`, `Engine<S,M,I,P>` — have comprehensive rustdoc explaining their role in the state machine model, with usage guidance
-- [ ] **DOC-02**: All new trait methods (`is_reversible`, `is_active`, `on_dispatch`, `on_undo`) have doc comments with runnable doctests demonstrating correct usage
-- [ ] **DOC-03**: `cargo doc --no-deps` generates zero warnings; module-level prose updated to reflect Mealy/Moore state machine framing
+- [x] **DOC-01**: All public types — `Mutation<S>`, `Behavior<S,M,I,P>`, `Action<M>`, `Engine<S,M,I,P>` — have comprehensive rustdoc explaining their role in the state machine model, with usage guidance
+- [x] **DOC-02**: All new trait methods (`is_reversible`, `is_active`, `on_dispatch`, `on_undo`) have doc comments with runnable doctests demonstrating correct usage
+- [x] **DOC-03**: `cargo doc --no-deps` generates zero warnings; module-level prose updated to reflect Mealy/Moore state machine framing
 
 ### Extended Tests
 
@@ -91,9 +91,9 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 | TEST-04 | Phase 6 | Complete |
 | TEST-05 | Phase 6 | Complete |
 | TEST-06 | Phase 6 | Complete |
-| DOC-01 | Phase 7 | Pending |
-| DOC-02 | Phase 7 | Pending |
-| DOC-03 | Phase 7 | Pending |
+| DOC-01 | Phase 7 | Complete |
+| DOC-02 | Phase 7 | Complete |
+| DOC-03 | Phase 7 | Complete |
 | TEST-07 | Phase 7 | Complete |
 | TEST-08 | Phase 7 | Complete |
 

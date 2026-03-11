@@ -25,7 +25,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 - [x] **Phase 4: Core Rename** - Rename Operation→Mutation, Rule→Behavior, Transaction→Action; remove RuleLifetime; all names consistent across codebase (completed 2026-03-11)
 - [x] **Phase 5: Reversibility and Behavior Lifecycle** - Add is_reversible() to Mutation, derive Action reversibility, enforce undo barrier, add is_active/on_dispatch/on_undo to Behavior (completed 2026-03-11)
 - [x] **Phase 6: Tests and Examples** - Proptest coverage for new reversibility model, stateful behavior unit test, update both examples to compile and run under new API (completed 2026-03-11)
-- [ ] **Phase 7: Documentation and Extended Tests** - Comprehensive rustdoc for all renamed types and new lifecycle methods; extended unit tests covering edge cases in reversibility and behavior lifecycle
+- [x] **Phase 7: Documentation and Extended Tests** - Comprehensive rustdoc for all renamed types and new lifecycle methods; extended unit tests covering edge cases in reversibility and behavior lifecycle (completed 2026-03-11)
 
 ## Phase Details
 
@@ -102,4 +102,4 @@ Plans:
 | 4. Core Rename | 4/4 | Complete   | 2026-03-11 | - |
 | 5. Reversibility and Behavior Lifecycle | 2/2 | Complete   | 2026-03-11 | - |
 | 6. Tests and Examples | 2/2 | Complete    | 2026-03-11 | - |
-| 7. Documentation and Extended Tests | 1/2 | In Progress|  | - |
+| 7. Documentation and Extended Tests | 2/2 | Complete   | 2026-03-11 | - |
