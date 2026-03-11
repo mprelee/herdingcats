@@ -103,6 +103,38 @@ pub trait Mutation<S>: Clone {
     /// The engine uses this at commit time — if any mutation in an Action returns
     /// `false`, the entire Action is treated as irreversible and the undo stack
     /// is cleared.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use herdingcats::{Mutation, Behavior, Action, Engine};
+    /// #[derive(Clone)]
+    /// enum DiceOp { Roll }
+    ///
+    /// impl Mutation<u32> for DiceOp {
+    ///     fn apply(&self, state: &mut u32) { *state = 42; }
+    ///     fn undo(&self, _state: &mut u32) {}
+    ///     fn hash_bytes(&self) -> Vec<u8>  { vec![0xD1] }
+    ///     fn is_reversible(&self) -> bool  { false }
+    /// }
+    ///
+    /// struct PassBehavior;
+    ///
+    /// impl Behavior<u32, DiceOp, (), u8> for PassBehavior {
+    ///     fn id(&self) -> &'static str { "pass" }
+    ///     fn priority(&self) -> u8    { 0 }
+    /// }
+    ///
+    /// let mut engine = Engine::new(0u32);
+    /// engine.add_behavior(PassBehavior);
+    ///
+    /// let mut tx = Action::new();
+    /// tx.mutations.push(DiceOp::Roll);
+    /// engine.dispatch((), tx);
+    ///
+    /// // DiceOp::Roll is not reversible, so the undo stack was cleared
+    /// assert!(!engine.can_undo());
+    /// ```
     fn is_reversible(&self) -> bool {
         true
     }

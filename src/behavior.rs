@@ -119,6 +119,41 @@ where
     /// removed. Sleeping behaviors still receive `on_dispatch()` and `on_undo()`
     /// calls so they can track dispatch history and self-reactivate (e.g.,
     /// a behavior that wakes after N turns).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use herdingcats::{Mutation, Behavior, Action, Engine};
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    ///
+    /// impl Mutation<i32> for CounterOp {
+    ///     fn apply(&self, state: &mut i32) { *state += 1; }
+    ///     fn undo(&self, state: &mut i32)  { *state -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8>  { vec![0] }
+    /// }
+    ///
+    /// struct SleepingRule;
+    ///
+    /// impl Behavior<i32, CounterOp, (), u8> for SleepingRule {
+    ///     fn id(&self) -> &'static str { "sleeping" }
+    ///     fn priority(&self) -> u8    { 0 }
+    ///     fn is_active(&self) -> bool { false }
+    ///     fn before(&self, _state: &i32, _event: &mut (), tx: &mut Action<CounterOp>) {
+    ///         // This would inject an Inc, but is_active() is false so it is skipped
+    ///         tx.mutations.push(CounterOp::Inc);
+    ///     }
+    /// }
+    ///
+    /// let mut engine = Engine::new(0i32);
+    /// engine.add_behavior(SleepingRule);
+    ///
+    /// // Dispatch with an empty action — SleepingRule.before() is never called
+    /// engine.dispatch((), Action::<CounterOp>::new());
+    ///
+    /// // State is still 0 because the sleeping behavior's before() was skipped
+    /// assert_eq!(engine.read(), 0);
+    /// ```
     fn is_active(&self) -> bool {
         true
     }
@@ -130,12 +165,90 @@ where
     /// (e.g., decrement a charge counter, toggle an activation flag).
     /// This hook fires in a separate pass after state mutations are applied,
     /// avoiding borrow conflicts with the `&self` hooks `before` and `after`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use herdingcats::{Mutation, Behavior, Action, Engine};
+    /// # use std::rc::Rc;
+    /// # use std::cell::Cell;
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    ///
+    /// impl Mutation<i32> for CounterOp {
+    ///     fn apply(&self, state: &mut i32) { *state += 1; }
+    ///     fn undo(&self, state: &mut i32)  { *state -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8>  { vec![0] }
+    /// }
+    ///
+    /// struct DispatchCounter { count: Rc<Cell<u32>> }
+    ///
+    /// impl Behavior<i32, CounterOp, (), u8> for DispatchCounter {
+    ///     fn id(&self) -> &'static str { "dispatch_counter" }
+    ///     fn priority(&self) -> u8    { 0 }
+    ///     fn on_dispatch(&mut self) {
+    ///         self.count.set(self.count.get() + 1);
+    ///     }
+    /// }
+    ///
+    /// let counter = Rc::new(Cell::new(0u32));
+    /// let mut engine = Engine::new(0i32);
+    /// engine.add_behavior(DispatchCounter { count: Rc::clone(&counter) });
+    ///
+    /// let mut tx1 = Action::new();
+    /// tx1.mutations.push(CounterOp::Inc);
+    /// engine.dispatch((), tx1);
+    ///
+    /// let mut tx2 = Action::new();
+    /// tx2.mutations.push(CounterOp::Inc);
+    /// engine.dispatch((), tx2);
+    ///
+    /// // on_dispatch was called once per committed action
+    /// assert_eq!(counter.get(), 2);
+    /// ```
     fn on_dispatch(&mut self) {}
 
     /// Called after each undo on ALL behaviors, regardless of `is_active()`.
     ///
     /// Use this to reverse behavior-internal state changes made in `on_dispatch`.
     /// Symmetry: `on_undo` reverses what `on_dispatch` advanced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use herdingcats::{Mutation, Behavior, Action, Engine};
+    /// # use std::rc::Rc;
+    /// # use std::cell::Cell;
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    ///
+    /// impl Mutation<i32> for CounterOp {
+    ///     fn apply(&self, state: &mut i32) { *state += 1; }
+    ///     fn undo(&self, state: &mut i32)  { *state -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8>  { vec![0] }
+    /// }
+    ///
+    /// struct DispatchCounter { count: Rc<Cell<u32>> }
+    ///
+    /// impl Behavior<i32, CounterOp, (), u8> for DispatchCounter {
+    ///     fn id(&self) -> &'static str { "dispatch_counter" }
+    ///     fn priority(&self) -> u8    { 0 }
+    ///     fn on_dispatch(&mut self) { self.count.set(self.count.get() + 1); }
+    ///     fn on_undo(&mut self)     { self.count.set(self.count.get() - 1); }
+    /// }
+    ///
+    /// let counter = Rc::new(Cell::new(0u32));
+    /// let mut engine = Engine::new(0i32);
+    /// engine.add_behavior(DispatchCounter { count: Rc::clone(&counter) });
+    ///
+    /// let mut tx = Action::new();
+    /// tx.mutations.push(CounterOp::Inc);
+    /// engine.dispatch((), tx);
+    /// assert_eq!(counter.get(), 1); // on_dispatch incremented
+    ///
+    /// engine.undo();
+    /// assert_eq!(counter.get(), 0); // on_undo decremented back to zero
+    /// ```
     fn on_undo(&mut self) {}
 }
 
