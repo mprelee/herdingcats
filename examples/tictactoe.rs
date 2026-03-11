@@ -50,7 +50,7 @@ impl Game {
 
 //
 // ------------------------------------------------------------
-// Operation
+// Mutation
 // ------------------------------------------------------------
 //
 
@@ -61,7 +61,7 @@ enum Op {
     SwitchTurn,
 }
 
-impl Operation<Game> for Op {
+impl Mutation<Game> for Op {
     fn apply(&self, state: &mut Game) {
         match self {
             Op::Place { idx, player } => {
@@ -133,13 +133,13 @@ enum GameEvent {
 
 //
 // ------------------------------------------------------------
-// Rules
+// Behaviors
 // ------------------------------------------------------------
 //
 
 struct PlayRule;
 
-impl Rule<Game, Op, GameEvent, GamePriority> for PlayRule {
+impl Behavior<Game, Op, GameEvent, GamePriority> for PlayRule {
     fn id(&self) -> &'static str {
         "play"
     }
@@ -148,7 +148,7 @@ impl Rule<Game, Op, GameEvent, GamePriority> for PlayRule {
         GamePriority::Default
     }
 
-    fn before(&self, state: &Game, event: &mut GameEvent, tx: &mut Transaction<Op>) {
+    fn before(&self, state: &Game, event: &mut GameEvent, tx: &mut Action<Op>) {
         if state.winner.is_some() {
             tx.cancelled = true;
             return;
@@ -161,18 +161,18 @@ impl Rule<Game, Op, GameEvent, GamePriority> for PlayRule {
             return;
         }
 
-        tx.ops.push(Op::Place {
+        tx.mutations.push(Op::Place {
             idx: *idx,
             player: state.current,
         });
 
-        tx.ops.push(Op::SwitchTurn);
+        tx.mutations.push(Op::SwitchTurn);
     }
 }
 
 struct WinRule;
 
-impl Rule<Game, Op, GameEvent, GamePriority> for WinRule {
+impl Behavior<Game, Op, GameEvent, GamePriority> for WinRule {
     fn id(&self) -> &'static str {
         "win_check"
     }
@@ -181,7 +181,7 @@ impl Rule<Game, Op, GameEvent, GamePriority> for WinRule {
         GamePriority::Default
     }
 
-    fn after(&self, state: &Game, _event: &GameEvent, tx: &mut Transaction<Op>) {
+    fn after(&self, state: &Game, _event: &GameEvent, tx: &mut Action<Op>) {
         let lines = [
             [0, 1, 2],
             [3, 4, 5],
@@ -204,7 +204,7 @@ impl Rule<Game, Op, GameEvent, GamePriority> for WinRule {
                     _ => unreachable!(),
                 };
 
-                tx.ops.push(Op::SetWinner { player: winner });
+                tx.mutations.push(Op::SetWinner { player: winner });
             }
         }
     }
@@ -244,13 +244,13 @@ impl fmt::Display for Game {
 fn main() {
     let mut engine = Engine::<Game, Op, GameEvent, GamePriority>::new(Game::new());
 
-    engine.add_rule(PlayRule, RuleLifetime::Permanent);
-    engine.add_rule(WinRule, RuleLifetime::Permanent);
+    engine.add_behavior(PlayRule);
+    engine.add_behavior(WinRule);
 
     let moves = [0, 3, 1, 4, 2];
 
     for m in moves {
-        let tx = Transaction::new();
+        let tx = Action::new();
 
         engine.dispatch(GameEvent::Play { idx: m }, tx);
 
