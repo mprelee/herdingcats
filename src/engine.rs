@@ -1658,8 +1658,12 @@ mod props {
     fn dispatch_returns_none_when_cancelled() {
         struct Canceller;
         impl Behavior<i32, CounterOp, (), u8> for Canceller {
-            fn id(&self) -> &'static str { "canceller" }
-            fn priority(&self) -> u8 { 0 }
+            fn id(&self) -> &'static str {
+                "canceller"
+            }
+            fn priority(&self) -> u8 {
+                0
+            }
             fn before(&self, _s: &i32, _e: &mut (), tx: &mut Action<CounterOp>) {
                 tx.cancelled = true;
             }
@@ -1679,7 +1683,10 @@ mod props {
         engine.add_behavior(NoRule);
 
         let result = engine.dispatch(()); // no mutations
-        assert!(result.is_none(), "empty-mutations dispatch should return None");
+        assert!(
+            result.is_none(),
+            "empty-mutations dispatch should return None"
+        );
     }
 
     #[test]
@@ -1690,7 +1697,10 @@ mod props {
         let mut tx = Action::new();
         tx.mutations.push(CounterOp::Inc);
         let result = engine.dispatch_with((), tx);
-        assert!(result.is_some(), "valid dispatch should return Some(action)");
+        assert!(
+            result.is_some(),
+            "valid dispatch should return Some(action)"
+        );
         let action = result.unwrap();
         assert_eq!(action.mutations.len(), 1);
         assert!(matches!(action.mutations[0], CounterOp::Inc));
@@ -1705,7 +1715,10 @@ mod props {
         let mut tx = Action::new();
         tx.mutations.push(MixedOp::Irrev);
         let result = engine.dispatch_with((), tx);
-        assert!(result.is_some(), "irreversible but valid dispatch should return Some");
+        assert!(
+            result.is_some(),
+            "irreversible but valid dispatch should return Some"
+        );
         let action = result.unwrap();
         assert_eq!(action.mutations.len(), 1);
         assert!(matches!(action.mutations[0], MixedOp::Irrev));
@@ -1721,8 +1734,12 @@ mod props {
     fn dispatch_preview_returns_action_after_behaviors() {
         struct MutationInjector;
         impl Behavior<i32, CounterOp, (), u8> for MutationInjector {
-            fn id(&self) -> &'static str { "injector" }
-            fn priority(&self) -> u8 { 0 }
+            fn id(&self) -> &'static str {
+                "injector"
+            }
+            fn priority(&self) -> u8 {
+                0
+            }
             fn before(&self, _s: &i32, _e: &mut (), tx: &mut Action<CounterOp>) {
                 tx.mutations.push(CounterOp::Dec);
             }
