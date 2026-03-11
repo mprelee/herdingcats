@@ -471,21 +471,18 @@ fn main() {
 
     // Roll dice (irreversible commit — clears undo stack, sets undo barrier)
     println!("Rolling dice: 3, 5");
-    let _ = engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 }, Action::new());
+    let _ = engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 });
     println!("{}", engine.state);
     println!("[irreversible commit — undo barrier set]");
 
     // Move 1 (die 0, value 3): point 8 → point 5 (0-indexed: 7 → 4)
     // White has 3 checkers on point 8 (index 7).
     println!("Moving checker from point 8 to point 5 (die 0, value 3)");
-    let _ = engine.dispatch(
-        BackgammonEvent::Move {
-            from: 7,
-            to: 4,
-            die_index: 0,
-        },
-        Action::new(),
-    );
+    let _ = engine.dispatch(BackgammonEvent::Move {
+        from: 7,
+        to: 4,
+        die_index: 0,
+    });
     println!("{}", engine.state);
 
     // Undo the move (reversible — returns to state just after dice roll)
@@ -495,14 +492,11 @@ fn main() {
 
     // Move again (die 0 is available again after undo)
     println!("Moving checker from point 8 to point 5 again (die 0)");
-    let _ = engine.dispatch(
-        BackgammonEvent::Move {
-            from: 7,
-            to: 4,
-            die_index: 0,
-        },
-        Action::new(),
-    );
+    let _ = engine.dispatch(BackgammonEvent::Move {
+        from: 7,
+        to: 4,
+        die_index: 0,
+    });
     println!("{}", engine.state);
 }
 
@@ -841,7 +835,7 @@ mod props {
             engine.add_behavior(MoveRule);
 
             // Roll dice (irreversible commit — undo barrier set; undo stack is empty after this)
-            let _ = engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 }, Action::new());
+            let _ = engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 });
 
             // Capture snapshot AFTER the dice roll (after the barrier)
             let state_before = engine.read();
@@ -854,10 +848,7 @@ mod props {
                 // saturating_sub brings to to 0 or the point may be empty.
                 prop_assume!(state_before.board[from] > 0);
 
-                let _ = engine.dispatch(
-                    BackgammonEvent::Move { from, to, die_index },
-                    Action::new(),
-                );
+                let _ = engine.dispatch(BackgammonEvent::Move { from, to, die_index });
                 engine.undo();
 
                 // Both state and replay_hash must match the pre-dispatch snapshot.
@@ -879,7 +870,7 @@ mod props {
             engine.add_behavior(MoveRule);
 
             // Dispatch a dice roll — irreversible commit
-            let _ = engine.dispatch(BackgammonEvent::RollDice { d1, d2 }, Action::new());
+            let _ = engine.dispatch(BackgammonEvent::RollDice { d1, d2 });
 
             // Undo stack must be empty (barrier enforced)
             prop_assert!(!engine.can_undo(),

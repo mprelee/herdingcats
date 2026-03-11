@@ -149,7 +149,7 @@ where
     /// engine.add_behavior(SleepingRule);
     ///
     /// // Dispatch with an empty action — SleepingRule.before() is never called
-    /// engine.dispatch((), Action::<CounterOp>::new());
+    /// engine.dispatch(());
     ///
     /// // State is still 0 because the sleeping behavior's before() was skipped
     /// assert_eq!(engine.read(), 0);
@@ -197,11 +197,11 @@ where
     ///
     /// let mut tx1 = Action::new();
     /// tx1.mutations.push(CounterOp::Inc);
-    /// engine.dispatch((), tx1);
+    /// engine.dispatch_with((), tx1);
     ///
     /// let mut tx2 = Action::new();
     /// tx2.mutations.push(CounterOp::Inc);
-    /// engine.dispatch((), tx2);
+    /// engine.dispatch_with((), tx2);
     ///
     /// // on_dispatch was called once per committed action
     /// assert_eq!(counter.get(), 2);
@@ -243,7 +243,7 @@ where
     ///
     /// let mut tx = Action::new();
     /// tx.mutations.push(CounterOp::Inc);
-    /// engine.dispatch((), tx);
+    /// engine.dispatch_with((), tx);
     /// assert_eq!(counter.get(), 1); // on_dispatch incremented
     ///
     /// engine.undo();
