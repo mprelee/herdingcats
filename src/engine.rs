@@ -2,10 +2,10 @@
 // Commit Frame (private)
 // ============================================================
 
+use crate::action::Action;
+use crate::behavior::Behavior;
 use crate::hash::{FNV_OFFSET, FNV_PRIME, fnv1a_hash};
 use crate::mutation::Mutation;
-use crate::behavior::Behavior;
-use crate::action::Action;
 
 // A single entry on the undo stack, capturing everything needed to reverse
 // one committed action and restore the engine to its prior state.
@@ -1082,17 +1082,23 @@ mod tests {
 
     #[test]
     fn stateful_behavior_n_dispatches() {
-        use std::rc::Rc;
         use std::cell::Cell;
+        use std::rc::Rc;
 
         struct CountingBehavior {
             dispatch_count: Rc<Cell<u32>>,
             active_for: u32,
         }
         impl Behavior<i32, CounterOp, (), u8> for CountingBehavior {
-            fn id(&self) -> &'static str { "counting" }
-            fn priority(&self) -> u8 { 0 }
-            fn is_active(&self) -> bool { self.dispatch_count.get() < self.active_for }
+            fn id(&self) -> &'static str {
+                "counting"
+            }
+            fn priority(&self) -> u8 {
+                0
+            }
+            fn is_active(&self) -> bool {
+                self.dispatch_count.get() < self.active_for
+            }
             fn on_dispatch(&mut self) {
                 self.dispatch_count.set(self.dispatch_count.get() + 1);
             }
@@ -1103,9 +1109,15 @@ mod tests {
             active_for: u32,
         }
         impl Behavior<i32, CounterOp, (), u8> for CountingBehavior2 {
-            fn id(&self) -> &'static str { "counting2" }
-            fn priority(&self) -> u8 { 0 }
-            fn is_active(&self) -> bool { self.dispatch_count.get() < self.active_for }
+            fn id(&self) -> &'static str {
+                "counting2"
+            }
+            fn priority(&self) -> u8 {
+                0
+            }
+            fn is_active(&self) -> bool {
+                self.dispatch_count.get() < self.active_for
+            }
             fn on_dispatch(&mut self) {
                 self.dispatch_count.set(self.dispatch_count.get() + 1);
             }
@@ -1158,8 +1170,7 @@ mod tests {
             // State after n dispatches = 0 (each Inc + Dec cancels out)
             // On dispatch n+1: CountingBehavior2 is inactive → before() skipped → only Inc applied → state = 1
             assert_eq!(
-                engine2.state,
-                1,
+                engine2.state, 1,
                 "before() hook should be skipped after n={n} dispatches; state should be 1 (only Inc, no Dec)"
             );
         }
@@ -1390,8 +1401,12 @@ mod props {
 
     struct MixedNoRule;
     impl Behavior<i32, MixedOp, (), u8> for MixedNoRule {
-        fn id(&self) -> &'static str { "mixed_no_rule_props" }
-        fn priority(&self) -> u8 { 0 }
+        fn id(&self) -> &'static str {
+            "mixed_no_rule_props"
+        }
+        fn priority(&self) -> u8 {
+            0
+        }
     }
 
     fn mixed_op_strategy() -> impl Strategy<Value = Vec<MixedOp>> {
@@ -1429,8 +1444,7 @@ mod props {
         }
     }
 
-    fn reversible_irrev_reversible_strategy()
-        -> impl Strategy<Value = (Vec<MixedOp>, Vec<MixedOp>)>
+    fn reversible_irrev_reversible_strategy() -> impl Strategy<Value = (Vec<MixedOp>, Vec<MixedOp>)>
     {
         (
             // prefix: 0..=5 Rev ops (dispatched before the Irrev)

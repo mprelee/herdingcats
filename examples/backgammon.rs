@@ -370,14 +370,10 @@ impl Behavior<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for Ro
         BackgammonPriority::Default
     }
 
-    fn before(
-        &self,
-        _state: &BgState,
-        event: &mut BackgammonEvent,
-        tx: &mut Action<BackgammonOp>,
-    ) {
+    fn before(&self, _state: &BgState, event: &mut BackgammonEvent, tx: &mut Action<BackgammonOp>) {
         if let BackgammonEvent::RollDice { d1, d2 } = event {
-            tx.mutations.push(BackgammonOp::RollDiceOp { d1: *d1, d2: *d2 });
+            tx.mutations
+                .push(BackgammonOp::RollDiceOp { d1: *d1, d2: *d2 });
         }
         // Move events are ignored by this rule.
     }
@@ -404,12 +400,7 @@ impl Behavior<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for Mo
         BackgammonPriority::Default
     }
 
-    fn before(
-        &self,
-        state: &BgState,
-        event: &mut BackgammonEvent,
-        tx: &mut Action<BackgammonOp>,
-    ) {
+    fn before(&self, state: &BgState, event: &mut BackgammonEvent, tx: &mut Action<BackgammonOp>) {
         if let BackgammonEvent::Move {
             from,
             to,
@@ -472,7 +463,9 @@ fn main() {
 
     let mut engine =
         Engine::<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority>::new(BgState::new());
-    engine.add_behavior(RollDiceRule { rolls_dispatched: 0 });
+    engine.add_behavior(RollDiceRule {
+        rolls_dispatched: 0,
+    });
     engine.add_behavior(MoveRule);
 
     // Roll dice (irreversible commit — clears undo stack, sets undo barrier)
@@ -485,7 +478,11 @@ fn main() {
     // White has 3 checkers on point 8 (index 7).
     println!("Moving checker from point 8 to point 5 (die 0, value 3)");
     engine.dispatch(
-        BackgammonEvent::Move { from: 7, to: 4, die_index: 0 },
+        BackgammonEvent::Move {
+            from: 7,
+            to: 4,
+            die_index: 0,
+        },
         Action::new(),
     );
     println!("{}", engine.state);
@@ -498,7 +495,11 @@ fn main() {
     // Move again (die 0 is available again after undo)
     println!("Moving checker from point 8 to point 5 again (die 0)");
     engine.dispatch(
-        BackgammonEvent::Move { from: 7, to: 4, die_index: 0 },
+        BackgammonEvent::Move {
+            from: 7,
+            to: 4,
+            die_index: 0,
+        },
         Action::new(),
     );
     println!("{}", engine.state);

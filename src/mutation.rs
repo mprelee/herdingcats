@@ -183,10 +183,16 @@ mod tests {
     struct IrreversibleOp;
 
     impl Mutation<i32> for IrreversibleOp {
-        fn apply(&self, state: &mut i32) { *state = 0; }
+        fn apply(&self, state: &mut i32) {
+            *state = 0;
+        }
         fn undo(&self, _state: &mut i32) {}
-        fn hash_bytes(&self) -> Vec<u8> { vec![99] }
-        fn is_reversible(&self) -> bool { false }
+        fn hash_bytes(&self) -> Vec<u8> {
+            vec![99]
+        }
+        fn is_reversible(&self) -> bool {
+            false
+        }
     }
 
     #[test]

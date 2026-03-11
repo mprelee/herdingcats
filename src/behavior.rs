@@ -308,14 +308,28 @@ mod tests {
         rule.on_undo(); // must compile and not panic
     }
 
-    struct CountingBehavior { dispatches: u32 }
+    struct CountingBehavior {
+        dispatches: u32,
+    }
 
     impl Behavior<(), NoOp, (), u8> for CountingBehavior {
-        fn id(&self) -> &'static str { "counter" }
-        fn priority(&self) -> u8 { 0 }
-        fn is_active(&self) -> bool { self.dispatches < 3 }
-        fn on_dispatch(&mut self) { self.dispatches += 1; }
-        fn on_undo(&mut self) { if self.dispatches > 0 { self.dispatches -= 1; } }
+        fn id(&self) -> &'static str {
+            "counter"
+        }
+        fn priority(&self) -> u8 {
+            0
+        }
+        fn is_active(&self) -> bool {
+            self.dispatches < 3
+        }
+        fn on_dispatch(&mut self) {
+            self.dispatches += 1;
+        }
+        fn on_undo(&mut self) {
+            if self.dispatches > 0 {
+                self.dispatches -= 1;
+            }
+        }
     }
 
     #[test]
