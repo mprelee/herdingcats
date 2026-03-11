@@ -86,10 +86,11 @@ Plans:
   2. `cargo test --doc` passes — runnable doctests on all new trait methods execute correctly and demonstrate expected usage
   3. `cargo test` passes with new unit tests for reversibility edge cases: empty `Action` (no mutations) is reversible; `Action` where all mutations are irreversible clears the undo stack; `Action` with mixed mutations (some reversible, some not) is treated as irreversible
   4. `cargo test` passes with new unit tests for behavior lifecycle edge cases: `is_active() = false` skips `before`/`after` hooks; `on_undo()` fires when a reversible action is undone; a behavior that deactivates during a dispatch sequence does not corrupt already-queued hooks
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 7 to break down)
+- [ ] 07-01-PLAN.md — lib.rs crate doc + doctests for is_reversible, is_active, on_dispatch, on_undo
+- [ ] 07-02-PLAN.md — engine.rs edge-case tests: mixed mutations, empty action, on_undo fires, deactivation-mid-dispatch
 
 ## Progress
 
@@ -101,4 +102,4 @@ Plans:
 | 4. Core Rename | 4/4 | Complete   | 2026-03-11 | - |
 | 5. Reversibility and Behavior Lifecycle | 2/2 | Complete   | 2026-03-11 | - |
 | 6. Tests and Examples | 2/2 | Complete    | 2026-03-11 | - |
-| 7. Documentation and Extended Tests | v1.1 | 0/TBD | Not started | - |
+| 7. Documentation and Extended Tests | v1.1 | 0/2 | Not started | - |
