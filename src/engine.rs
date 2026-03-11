@@ -1521,4 +1521,93 @@ mod props {
             );
         }
     }
+
+    // --------------------------------------------------------
+    // dispatch() return value tests
+    // --------------------------------------------------------
+
+    #[test]
+    fn dispatch_returns_none_when_cancelled() {
+        struct Canceller;
+        impl Behavior<i32, CounterOp, (), u8> for Canceller {
+            fn id(&self) -> &'static str { "canceller" }
+            fn priority(&self) -> u8 { 0 }
+            fn before(&self, _s: &i32, _e: &mut (), tx: &mut Action<CounterOp>) {
+                tx.cancelled = true;
+            }
+        }
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(Canceller);
+
+        let mut tx = Action::new();
+        tx.mutations.push(CounterOp::Inc);
+        let result = engine.dispatch((), tx);
+        assert!(result.is_none(), "cancelled dispatch should return None");
+    }
+
+    #[test]
+    fn dispatch_returns_none_when_mutations_empty() {
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(NoRule);
+
+        let tx = Action::new(); // no mutations
+        let result = engine.dispatch((), tx);
+        assert!(result.is_none(), "empty-mutations dispatch should return None");
+    }
+
+    #[test]
+    fn dispatch_returns_some_with_mutations_when_committed() {
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(NoRule);
+
+        let mut tx = Action::new();
+        tx.mutations.push(CounterOp::Inc);
+        let result = engine.dispatch((), tx);
+        assert!(result.is_some(), "valid dispatch should return Some(action)");
+        let action = result.unwrap();
+        assert_eq!(action.mutations.len(), 1);
+        assert!(matches!(action.mutations[0], CounterOp::Inc));
+        assert_eq!(engine.read(), 1);
+    }
+
+    #[test]
+    fn dispatch_returns_some_for_irreversible_action() {
+        let mut engine: Engine<i32, MixedOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(MixedNoRule);
+
+        let mut tx = Action::new();
+        tx.mutations.push(MixedOp::Irrev);
+        let result = engine.dispatch((), tx);
+        assert!(result.is_some(), "irreversible but valid dispatch should return Some");
+        let action = result.unwrap();
+        assert_eq!(action.mutations.len(), 1);
+        assert!(matches!(action.mutations[0], MixedOp::Irrev));
+        assert_eq!(engine.read(), 99);
+    }
+
+    // --------------------------------------------------------
+    // dispatch_preview() return value tests
+    // --------------------------------------------------------
+
+    #[test]
+    fn dispatch_preview_returns_action_after_behaviors() {
+        struct MutationInjector;
+        impl Behavior<i32, CounterOp, (), u8> for MutationInjector {
+            fn id(&self) -> &'static str { "injector" }
+            fn priority(&self) -> u8 { 0 }
+            fn before(&self, _s: &i32, _e: &mut (), tx: &mut Action<CounterOp>) {
+                tx.mutations.push(CounterOp::Dec);
+            }
+        }
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(MutationInjector);
+
+        let mut tx = Action::new();
+        tx.mutations.push(CounterOp::Inc);
+        let preview = engine.dispatch_preview((), tx);
+        // Behavior injected a Dec, so preview should have 2 mutations
+        assert_eq!(preview.mutations.len(), 2);
+        // State should be unchanged
+        assert_eq!(engine.read(), 0);
+    }
 }
