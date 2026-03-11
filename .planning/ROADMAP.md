@@ -71,10 +71,11 @@ Plans:
   3. New proptest verifies: reversible `Action`s after an irreversible commit are individually undoable; undo halts at the barrier
   4. New unit test verifies: a stateful `Behavior` using `on_dispatch` counter deactivates after N dispatches (replaces RuleLifetime::Turns proptest)
   5. `cargo run --example backgammon` runs correctly with dice roll mutation returning `is_reversible() = false` and `RollDiceRule` using `on_dispatch`/`is_active`
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 6 to break down)
+- [ ] 06-01-PLAN.md — engine.rs: name audit (TEST-01), prop_05/prop_06 reversibility proptests (TEST-02/03), stateful behavior unit test (TEST-04)
+- [ ] 06-02-PLAN.md — examples: backgammon update with is_reversible/on_dispatch/demo/proptest (TEST-05), tictactoe confirm (TEST-06)
 
 ### Phase 7: Documentation and Extended Tests
 **Goal**: Comprehensive rustdoc for all renamed types and new lifecycle methods; extended unit tests covering edge cases in reversibility and behavior lifecycle
@@ -99,5 +100,5 @@ Plans:
 | 3. Backgammon Example and Integration Properties | v1.0 | 2/2 | Complete | 2026-03-09 |
 | 4. Core Rename | 4/4 | Complete   | 2026-03-11 | - |
 | 5. Reversibility and Behavior Lifecycle | 2/2 | Complete   | 2026-03-11 | - |
-| 6. Tests and Examples | v1.1 | 0/TBD | Not started | - |
+| 6. Tests and Examples | v1.1 | 0/2 | Not started | - |
 | 7. Documentation and Extended Tests | v1.1 | 0/TBD | Not started | - |
