@@ -471,14 +471,14 @@ fn main() {
 
     // Roll dice (irreversible commit — clears undo stack, sets undo barrier)
     println!("Rolling dice: 3, 5");
-    engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 }, Action::new());
+    let _ = engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 }, Action::new());
     println!("{}", engine.state);
     println!("[irreversible commit — undo barrier set]");
 
     // Move 1 (die 0, value 3): point 8 → point 5 (0-indexed: 7 → 4)
     // White has 3 checkers on point 8 (index 7).
     println!("Moving checker from point 8 to point 5 (die 0, value 3)");
-    engine.dispatch(
+    let _ = engine.dispatch(
         BackgammonEvent::Move {
             from: 7,
             to: 4,
@@ -495,7 +495,7 @@ fn main() {
 
     // Move again (die 0 is available again after undo)
     println!("Moving checker from point 8 to point 5 again (die 0)");
-    engine.dispatch(
+    let _ = engine.dispatch(
         BackgammonEvent::Move {
             from: 7,
             to: 4,
@@ -841,7 +841,7 @@ mod props {
             engine.add_behavior(MoveRule);
 
             // Roll dice (irreversible commit — undo barrier set; undo stack is empty after this)
-            engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 }, Action::new());
+            let _ = engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 }, Action::new());
 
             // Capture snapshot AFTER the dice roll (after the barrier)
             let state_before = engine.read();
@@ -854,7 +854,7 @@ mod props {
                 // saturating_sub brings to to 0 or the point may be empty.
                 prop_assume!(state_before.board[from] > 0);
 
-                engine.dispatch(
+                let _ = engine.dispatch(
                     BackgammonEvent::Move { from, to, die_index },
                     Action::new(),
                 );
@@ -879,7 +879,7 @@ mod props {
             engine.add_behavior(MoveRule);
 
             // Dispatch a dice roll — irreversible commit
-            engine.dispatch(BackgammonEvent::RollDice { d1, d2 }, Action::new());
+            let _ = engine.dispatch(BackgammonEvent::RollDice { d1, d2 }, Action::new());
 
             // Undo stack must be empty (barrier enforced)
             prop_assert!(!engine.can_undo(),

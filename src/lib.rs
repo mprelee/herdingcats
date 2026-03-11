@@ -70,7 +70,7 @@
 //!
 //! let mut tx = Action::new();
 //! tx.mutations.push(CounterOp::Inc);
-//! engine.dispatch((), tx);
+//! let _ = engine.dispatch((), tx);
 //!
 //! assert_eq!(engine.read().0, 1);
 //!
