@@ -5,7 +5,7 @@ milestone_name: milestone
 status: Milestone shipped
 stopped_at: "Completed quick-2 plan: add return types to dispatch and dispatch_preview"
 last_updated: "2026-03-11T05:05:13.092Z"
-last_activity: 2026-03-11 — v1.1 Rename & Reversibility complete
+last_activity: 2026-03-11 — Completed quick task 2: add return types to dispatch and related functions
 progress:
   total_phases: 6
   completed_phases: 3
@@ -51,6 +51,12 @@ None.
 ### Blockers/Concerns
 
 None — v1.1 shipped. Ready for next milestone planning.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 2 | add return types to dispatch and related functions, dispatch returns Option<Action<M>> | 2026-03-11 | 7388df6 | [2-add-return-types-to-dispatch-and-related](.planning/quick/2-add-return-types-to-dispatch-and-related/) |
 
 ## Session Continuity
 
