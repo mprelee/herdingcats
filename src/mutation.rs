@@ -97,6 +97,15 @@ pub trait Mutation<S>: Clone {
     /// assert!(!m.hash_bytes().is_empty());
     /// ```
     fn hash_bytes(&self) -> Vec<u8>;
+
+    /// Returns `true` by default. Override to return `false` for mutations that
+    /// represent irreversible state changes (e.g., dice rolls, card draws).
+    /// The engine uses this at commit time — if any mutation in an Action returns
+    /// `false`, the entire Action is treated as irreversible and the undo stack
+    /// is cleared.
+    fn is_reversible(&self) -> bool {
+        true
+    }
 }
 
 // ============================================================
@@ -130,5 +139,27 @@ mod tests {
         assert_eq!(state, 1);
         op.undo(&mut state);
         assert_eq!(state, 0);
+    }
+
+    #[test]
+    fn is_reversible_default_true() {
+        let op = Inc;
+        assert!(op.is_reversible());
+    }
+
+    #[derive(Clone)]
+    struct IrreversibleOp;
+
+    impl Mutation<i32> for IrreversibleOp {
+        fn apply(&self, state: &mut i32) { *state = 0; }
+        fn undo(&self, _state: &mut i32) {}
+        fn hash_bytes(&self) -> Vec<u8> { vec![99] }
+        fn is_reversible(&self) -> bool { false }
+    }
+
+    #[test]
+    fn is_reversible_override_false() {
+        let op = IrreversibleOp;
+        assert!(!op.is_reversible());
     }
 }
