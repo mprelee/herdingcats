@@ -47,8 +47,8 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 
 ### Extended Tests
 
-- [ ] **TEST-07**: Unit tests for reversibility edge cases — empty `Action` (no mutations) is reversible; Action where all mutations are irreversible clears undo stack; Action with mixed mutations (some `is_reversible() = true`, some `false`) is treated as irreversible
-- [ ] **TEST-08**: Unit tests for behavior lifecycle edge cases — `is_active() = false` skips `before`/`after` hooks; `on_undo()` called correctly when undoing; behavior deactivating during a dispatch sequence doesn't affect already-queued hooks
+- [x] **TEST-07**: Unit tests for reversibility edge cases — empty `Action` (no mutations) is reversible; Action where all mutations are irreversible clears undo stack; Action with mixed mutations (some `is_reversible() = true`, some `false`) is treated as irreversible
+- [x] **TEST-08**: Unit tests for behavior lifecycle edge cases — `is_active() = false` skips `before`/`after` hooks; `on_undo()` called correctly when undoing; behavior deactivating during a dispatch sequence doesn't affect already-queued hooks
 
 ## v2 Requirements
 
@@ -94,8 +94,8 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 | DOC-01 | Phase 7 | Pending |
 | DOC-02 | Phase 7 | Pending |
 | DOC-03 | Phase 7 | Pending |
-| TEST-07 | Phase 7 | Pending |
-| TEST-08 | Phase 7 | Pending |
+| TEST-07 | Phase 7 | Complete |
+| TEST-08 | Phase 7 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 25 total
