@@ -38,10 +38,12 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   2. `cargo test` passes — all unit tests and doctests reference new names with no compilation errors
   3. `cargo run --example tictactoe` and `cargo run --example backgammon` compile and run without behavioral changes
   4. `RuleLifetime` no longer appears anywhere in the public API or source (dead code eliminated)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] TBD (run /gsd:plan-phase 4 to break down)
+- [ ] 04-01-PLAN.md — Create mutation.rs, behavior.rs, action.rs; update lib.rs re-exports
+- [ ] 04-02-PLAN.md — Rewrite engine.rs with new types, add_behavior; delete old source files
+- [ ] 04-03-PLAN.md — Update examples (tictactoe, backgammon); bump Cargo.toml to 0.3.0
 
 ### Phase 5: Reversibility and Behavior Lifecycle
 **Goal**: Mutations self-report reversibility, Actions derive their reversibility from mutations at commit time, irreversible commits clear the undo stack, and Behaviors self-manage their own lifecycle via is_active/on_dispatch/on_undo hooks
@@ -94,7 +96,7 @@ Plans:
 | 1. Module Split and Foundation | v1.0 | 3/3 | Complete | 2026-03-09 |
 | 2. Engine Property Tests | v1.0 | 1/1 | Complete | 2026-03-09 |
 | 3. Backgammon Example and Integration Properties | v1.0 | 2/2 | Complete | 2026-03-09 |
-| 4. Core Rename | v1.1 | 0/TBD | Not started | - |
+| 4. Core Rename | v1.1 | 0/3 | Not started | - |
 | 5. Reversibility and Behavior Lifecycle | v1.1 | 0/TBD | Not started | - |
 | 6. Tests and Examples | v1.1 | 0/TBD | Not started | - |
 | 7. Documentation and Extended Tests | v1.1 | 0/TBD | Not started | - |
