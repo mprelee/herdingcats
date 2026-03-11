@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Rename & Reversibility
 status: planning
-stopped_at: Completed 04-core-rename-03-PLAN.md
-last_updated: "2026-03-11T00:52:20.675Z"
+stopped_at: Completed 04-core-rename-04-PLAN.md
+last_updated: "2026-03-11T01:03:59.471Z"
 last_activity: 2026-03-10 — Phase 7 added; all 25/25 v1.1 requirements mapped across Phases 4-7
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 4
+  completed_plans: 4
   percent: 0
 ---
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04-core-rename P01 | 2 | 3 tasks | 4 files |
 | Phase 04-core-rename P02 | 3 | 2 tasks | 4 files |
 | Phase 04-core-rename P03 | 10 | 3 tasks | 3 files |
+| Phase 04-core-rename P04 | 2 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,7 @@ Recent decisions affecting current work:
 - [Phase 04-core-rename]: PROP-03 turns/triggers tests deleted — tested public RuleLifetime behavior removed from API; internal RuleLifetime remains private in engine.rs until Phase 5
 - [Phase 04-core-rename]: dice rolls are now undoable in Phase 4 (no irreversible field on Action); Phase 5 will restore non-undoable semantics via is_reversible() on RollDiceOp
 - [Phase 04-core-rename]: examples serve as integration smoke tests confirming end-to-end rename is correct across all files
+- [Phase 04-core-rename]: Remove Turns/Triggers variants rather than suppressing dead_code — cleaner since Phase 5 removes the entire lifetimes map
 
 ### Pending Todos
 
@@ -84,6 +86,6 @@ None — v1.0 complete. v1.1 roadmap ready (Phases 4-7). Phase 4 unblocked.
 
 ## Session Continuity
 
-Last session: 2026-03-11T00:52:20.673Z
-Stopped at: Completed 04-core-rename-03-PLAN.md
+Last session: 2026-03-11T01:03:59.470Z
+Stopped at: Completed 04-core-rename-04-PLAN.md
 Resume file: None

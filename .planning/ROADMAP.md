@@ -96,7 +96,7 @@ Plans:
 | 1. Module Split and Foundation | v1.0 | 3/3 | Complete | 2026-03-09 |
 | 2. Engine Property Tests | v1.0 | 1/1 | Complete | 2026-03-09 |
 | 3. Backgammon Example and Integration Properties | v1.0 | 2/2 | Complete | 2026-03-09 |
-| 4. Core Rename | 3/3 | Complete   | 2026-03-11 | - |
+| 4. Core Rename | 4/4 | Complete   | 2026-03-11 | - |
 | 5. Reversibility and Behavior Lifecycle | v1.1 | 0/TBD | Not started | - |
 | 6. Tests and Examples | v1.1 | 0/TBD | Not started | - |
 | 7. Documentation and Extended Tests | v1.1 | 0/TBD | Not started | - |
