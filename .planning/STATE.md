@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Rename & Reversibility
 status: planning
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-03-11T01:46:57.657Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-03-11T01:50:54.720Z"
 last_activity: 2026-03-10 — Phase 7 added; all 25/25 v1.1 requirements mapped across Phases 4-7
 progress:
   total_phases: 4
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04-core-rename P03 | 10 | 3 tasks | 3 files |
 | Phase 04-core-rename P04 | 2 | 2 tasks | 1 files |
 | Phase 05-reversibility-and-behavior-lifecycle P01 | 5 | 2 tasks | 2 files |
+| Phase 05-reversibility-and-behavior-lifecycle P02 | 3 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,8 @@ Recent decisions affecting current work:
 - [Phase 04-core-rename]: examples serve as integration smoke tests confirming end-to-end rename is correct across all files
 - [Phase 04-core-rename]: Remove Turns/Triggers variants rather than suppressing dead_code — cleaner since Phase 5 removes the entire lifetimes map
 - [Phase 05-reversibility-and-behavior-lifecycle]: Default implementations for is_reversible/is_active/on_dispatch/on_undo ensure all existing implementors compile without changes
+- [Phase 05-02]: Lifecycle passes unconditionally call on_dispatch/on_undo on ALL behaviors regardless of is_active() — per locked decision
+- [Phase 05-02]: Empty action guard added to dispatch commit gate — prevents spurious on_dispatch() calls on actions with no mutations
 
 ### Pending Todos
 
@@ -88,6 +91,6 @@ None — v1.0 complete. v1.1 roadmap ready (Phases 4-7). Phase 4 unblocked.
 
 ## Session Continuity
 
-Last session: 2026-03-11T01:46:52.066Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-03-11T01:50:54.719Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None

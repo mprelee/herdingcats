@@ -17,18 +17,18 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 ### Reversibility
 
 - [x] **REV-01**: `Mutation` trait gains `fn is_reversible(&self) -> bool { true }` as a default method — opt-out model, reversible by default
-- [ ] **REV-02**: `Action<M>` derives reversibility from its mutations at commit time — reversible iff `mutations.iter().all(|m| m.is_reversible())`; no explicit reversibility field on `Action`
-- [ ] **REV-03**: Engine clears the undo stack when committing an irreversible `Action` — enforces undo barrier (cannot undo past last irreversible commit)
-- [ ] **REV-04**: Reversible `Action` commits push `CommitFrame` to undo stack as before; undo/redo semantics unchanged for reversible commits
+- [x] **REV-02**: `Action<M>` derives reversibility from its mutations at commit time — reversible iff `mutations.iter().all(|m| m.is_reversible())`; no explicit reversibility field on `Action`
+- [x] **REV-03**: Engine clears the undo stack when committing an irreversible `Action` — enforces undo barrier (cannot undo past last irreversible commit)
+- [x] **REV-04**: Reversible `Action` commits push `CommitFrame` to undo stack as before; undo/redo semantics unchanged for reversible commits
 
 ### Behavior Lifecycle
 
 - [x] **LIFE-01**: `Behavior` trait gains `fn is_active(&self) -> bool { true }` default method — engine checks this per dispatch to determine if behavior participates
 - [x] **LIFE-02**: `Behavior` trait gains `fn on_dispatch(&mut self) {}` default method — called after each committed action (including redo) so behaviors can update internal state
 - [x] **LIFE-03**: `Behavior` trait gains `fn on_undo(&mut self) {}` default method — called when a reversible action is undone, enabling behaviors to reverse their own state changes
-- [ ] **LIFE-04**: `engine.add_behavior(behavior)` replaces `engine.add_rule(behavior, lifetime)` — no lifetime parameter; behaviors self-manage their active status
-- [ ] **LIFE-05**: Engine replaces `lifetimes: HashMap<&'static str, RuleLifetime>` + `enabled: HashSet<&'static str>` with per-dispatch `behavior.is_active()` checks
-- [ ] **LIFE-06**: Engine calls `on_dispatch()` / `on_undo()` on all behaviors in a separate pass after state mutations are applied, avoiding borrow conflicts with state access in `before`/`after` hooks
+- [x] **LIFE-04**: `engine.add_behavior(behavior)` replaces `engine.add_rule(behavior, lifetime)` — no lifetime parameter; behaviors self-manage their active status
+- [x] **LIFE-05**: Engine replaces `lifetimes: HashMap<&'static str, RuleLifetime>` + `enabled: HashSet<&'static str>` with per-dispatch `behavior.is_active()` checks
+- [x] **LIFE-06**: Engine calls `on_dispatch()` / `on_undo()` on all behaviors in a separate pass after state mutations are applied, avoiding borrow conflicts with state access in `before`/`after` hooks
 
 ### Tests
 
@@ -76,15 +76,15 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 | REN-03 | Phase 4 | Complete |
 | REN-04 | Phase 4 | Complete |
 | REV-01 | Phase 5 | Complete |
-| REV-02 | Phase 5 | Pending |
-| REV-03 | Phase 5 | Pending |
-| REV-04 | Phase 5 | Pending |
+| REV-02 | Phase 5 | Complete |
+| REV-03 | Phase 5 | Complete |
+| REV-04 | Phase 5 | Complete |
 | LIFE-01 | Phase 5 | Complete |
 | LIFE-02 | Phase 5 | Complete |
 | LIFE-03 | Phase 5 | Complete |
-| LIFE-04 | Phase 5 | Pending |
-| LIFE-05 | Phase 5 | Pending |
-| LIFE-06 | Phase 5 | Pending |
+| LIFE-04 | Phase 5 | Complete |
+| LIFE-05 | Phase 5 | Complete |
+| LIFE-06 | Phase 5 | Complete |
 | TEST-01 | Phase 6 | Pending |
 | TEST-02 | Phase 6 | Pending |
 | TEST-03 | Phase 6 | Pending |
