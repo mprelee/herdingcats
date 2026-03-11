@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Milestone shipped
-stopped_at: "Completed quick-2 plan: add return types to dispatch and dispatch_preview"
-last_updated: "2026-03-11T05:05:13.092Z"
-last_activity: 2026-03-11 — Completed quick task 2: add return types to dispatch and related functions
+stopped_at: "Completed quick-3 plan: remove deterministic field, fnv1a hash, dispatch/dispatch_with API"
+last_updated: "2026-03-11T05:36:00.000Z"
+last_activity: 2026-03-11 — Completed quick task 3: remove deterministic field, fix fnv1a replay hash, add dispatch/dispatch_with
 progress:
   total_phases: 6
   completed_phases: 3
@@ -57,9 +57,10 @@ None — v1.1 shipped. Ready for next milestone planning.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 2 | add return types to dispatch and related functions, dispatch returns Option<Action<M>> | 2026-03-11 | 7388df6 | [2-add-return-types-to-dispatch-and-related](.planning/quick/2-add-return-types-to-dispatch-and-related/) |
+| 3 | remove deterministic field, fix fnv1a replay hash, add dispatch(event)/dispatch_with(event, tx) API | 2026-03-11 | 31780cd | [3-remove-deterministic-flag-use-fnv1a-hash](.planning/quick/3-remove-deterministic-flag-use-fnv1a-hash/) |
 
 ## Session Continuity
 
-Last session: 2026-03-11T05:05:13.090Z
-Stopped at: Completed quick-2 plan: add return types to dispatch and dispatch_preview
+Last session: 2026-03-11T05:36:00.000Z
+Stopped at: Completed quick-3 plan: remove deterministic field, fnv1a hash, dispatch/dispatch_with API
 Resume file: None
