@@ -7,20 +7,19 @@ Author:  Madeline Prelee (mprelee@gmail.com)
 
 ## Overview
 
-`herdingcats` is a generic engine for implementing deterministic, rule-driven turn-based systems.
+`herdingcats` is a generic engine for implementing deterministic, behavior-driven turn-based systems.
 
 It provides:
 
-- Explicit priority-ordered rule execution  
-- Transactional state mutation  
-- Undo / redo  
-- Replay-safe hashing (FNV‑1a)  
-- Rule enable / disable  
-- Rule lifetimes (per-turn / per-trigger)  
-- Event cancellation  
-- Preview execution without committing state  
-- Static, enum-based event dispatch  
-- Compile-time enforced integer-backed priority  
+- Explicit priority-ordered behavior execution
+- Atomic state mutation via `Action<M>`
+- Undo / redo
+- Replay-safe hashing (FNV‑1a)
+- Behavior enable / disable
+- Event cancellation
+- Preview execution without committing state
+- Static, enum-based event dispatch
+- Compile-time enforced integer-backed priority
 
 The engine is application-agnostic and does not prescribe game semantics.
 
@@ -30,30 +29,42 @@ The engine is application-agnostic and does not prescribe game semantics.
 
 The engine is parameterized over:
 
-- `S` — game state  
-- `O` — operation type (`Operation<S>`)  
-- `E` — event enum  
-- `P` — priority enum (`#[repr(i32)]`, sealed)  
+- `S` — game state
+- `M` — mutation type (`Mutation<S>`)
+- `I` — input / event enum
+- `P` — priority type (`Copy + Ord`, e.g. `u8` or `#[repr(i32)]` enum)
 
-State mutation occurs exclusively through `Operation`.
+State mutation occurs exclusively through `Mutation`.
 
-All irreversible transactions:
+All mutations:
 
-- Are logged  
-- Are undoable  
-- Update the replay hash  
-- Produce commit frames  
+- Are logged
+- Are undoable
+- Update the replay hash
+- Produce commit frames
+
+---
+
+## Dispatch API
+
+Three methods cover the main dispatch use-cases:
+
+| Method | Description | Returns |
+|---|---|---|
+| `dispatch(event)` | Simple path. Behaviors inject mutations via `before` hooks. | `Option<Action<M>>` — `Some` if mutations were committed, `None` if cancelled or no mutations produced |
+| `dispatch_with(event, tx)` | Pre-built action path. Pass an `Action<M>` with mutations already populated; `dispatch` delegates to this internally. | `Option<Action<M>>` |
+| `dispatch_preview(event, tx)` | Dry-run. Same pipeline as `dispatch_with` but all state changes are rolled back. Useful for AI look-ahead and UI preview. | `Action<M>` (never `None`) |
 
 ---
 
 ## Determinism Guarantees
 
-- No hidden state mutation  
-- No dynamic event dispatch  
-- No runtime type inspection  
-- No unordered rule execution  
-- Replay hash restored on undo / redo  
-- Preview execution does not mutate history  
+- No hidden state mutation
+- No dynamic event dispatch
+- No runtime type inspection
+- No unordered behavior execution
+- Replay hash restored on undo / redo
+- Preview execution does not mutate history
 
 All ordering is explicit via priority.
 
@@ -63,18 +74,18 @@ All ordering is explicit via priority.
 
 Designed for discrete, turn-based systems such as:
 
-- Roguelikes  
-- Tactical strategy games  
-- Card systems  
-- Deterministic multiplayer simulations  
-- Digital board games  
+- Roguelikes
+- Tactical strategy games
+- Card systems
+- Deterministic multiplayer simulations
+- Digital board games
 
 Not intended for:
 
-- Real-time systems  
-- Physics simulations  
-- Dynamic scripting engines  
-- Freeform narrative interpretation  
+- Real-time systems
+- Physics simulations
+- Dynamic scripting engines
+- Freeform narrative interpretation
 
 ---
 
