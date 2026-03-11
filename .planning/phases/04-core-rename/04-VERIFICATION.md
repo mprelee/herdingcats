@@ -1,25 +1,23 @@
 ---
 phase: 04-core-rename
-verified: 2026-03-10T00:00:00Z
-status: gaps_found
-score: 13/14 must-haves verified
-gaps:
-  - truth: "cargo build succeeds with zero warnings"
-    status: failed
-    reason: "cargo build emits 1 dead_code warning for RuleLifetime::Turns and RuleLifetime::Triggers variants in engine.rs. These variants are defined in the private internal enum but never constructed (add_behavior always inserts Permanent). The variants ARE matched in dispatch logic but Rust's dead_code lint fires on the constructor side."
-    artifacts:
-      - path: "src/engine.rs"
-        issue: "Private RuleLifetime enum has Turns(u32) and Triggers(u32) variants that are never constructed — only ever pattern-matched. Emits: 'warning: variants Turns and Triggers are never constructed'"
-    missing:
-      - "Either suppress the dead_code warning on the internal RuleLifetime enum with #[allow(dead_code)] (appropriate since these variants are intentional Phase 5 scaffolding), or remove Turns and Triggers from the enum entirely since add_behavior always inserts Permanent and no code path ever constructs non-Permanent lifetimes after the rename."
+verified: 2026-03-11T00:00:00Z
+status: passed
+score: 14/14 must-haves verified
+re_verification:
+  previous_status: gaps_found
+  previous_score: 13/14
+  gaps_closed:
+    - "cargo build succeeds with zero warnings — RuleLifetime::Turns and Triggers removed in commit 2e42a38"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 4: Core Rename Verification Report
 
 **Phase Goal:** Rename all public-facing types and methods to use the new domain vocabulary (Mutation, Behavior, Action, add_behavior) with zero breaking changes to existing example behavior.
-**Verified:** 2026-03-10T00:00:00Z
-**Status:** gaps_found — 1 gap (cargo warning; all functional goals met)
-**Re-verification:** No — initial verification
+**Verified:** 2026-03-11T00:00:00Z
+**Status:** passed
+**Re-verification:** Yes — after gap closure (plan 04-04 addressed dead_code warning)
 
 ## Goal Achievement
 
@@ -27,7 +25,7 @@ gaps:
 
 | #  | Truth | Status | Evidence |
 |----|-------|--------|----------|
-| 1  | src/mutation.rs exports `pub trait Mutation<S>` with apply, undo, hash_bytes | VERIFIED | File exists at 135 lines; `pub trait Mutation<S>: Clone` declared at line 15; all three methods present with correct signatures; zero occurrences of "Operation" |
+| 1  | src/mutation.rs exports `pub trait Mutation<S>` with apply, undo, hash_bytes | VERIFIED | File exists at 135 lines; `pub trait Mutation<S>: Clone` declared at line 15; all three methods present; zero occurrences of "Operation" |
 | 2  | src/behavior.rs exports `pub trait Behavior<S,M,I,P>` with before, after, id, priority | VERIFIED | File exists at 154 lines; `pub trait Behavior<S, M, I, P>` declared at line 21; all four methods present; uses `Action<M>` in before/after signatures |
 | 3  | src/action.rs exports `pub struct Action<M>` with mutations, deterministic, cancelled (no irreversible, no RuleLifetime) | VERIFIED | File exists at 84 lines; `pub struct Action<M>` declared at line 19; exactly three fields: mutations/deterministic/cancelled; zero occurrences of "irreversible" or "RuleLifetime" |
 | 4  | src/lib.rs re-exports Mutation, Behavior, Action, Engine (not Operation, Rule, Transaction, RuleLifetime) | VERIFIED | lib.rs re-exports exactly: `pub use action::Action`, `pub use behavior::Behavior`, `pub use engine::Engine`, `pub use mutation::Mutation`; no old names re-exported |
@@ -39,10 +37,10 @@ gaps:
 | 10 | CommitFrame stores Action<M> instead of Transaction<O> | VERIFIED | `struct CommitFrame<S, M>` with `tx: Action<M>` field; all mutations references use `tx.mutations` |
 | 11 | examples/tictactoe.rs compiles and runs with new API names | VERIFIED | `impl Mutation<Game> for Op`, `impl Behavior<...> for PlayRule/WinRule`, `tx.mutations.push()`, `engine.add_behavior()`, `Action::new()`; runs correctly printing board with X winning on move 5 |
 | 12 | examples/backgammon.rs compiles and runs with new API names | VERIFIED | `impl Mutation<BgState> for BackgammonOp`, `impl Behavior<...> for RollDiceRule/MoveRule`, no irreversible field usage; runs correctly showing dice roll, 2 moves, undo sequence |
-| 13 | No reference to Operation, Rule, Transaction, RuleLifetime in examples or public API | VERIFIED | grep for old names in examples/ returns zero matches; lib.rs has no old re-exports; engine.rs has no public occurrences (internal private enum only) |
-| 14 | cargo build succeeds with zero warnings | FAILED | Build succeeds (zero errors) but emits 1 dead_code warning: "variants `Turns` and `Triggers` are never constructed" in the private internal `RuleLifetime` enum in engine.rs |
+| 13 | No reference to Operation, Rule, Transaction, RuleLifetime in examples or public API | VERIFIED | grep for old names in examples/ returns zero matches; lib.rs has no old re-exports; engine.rs has no public occurrences |
+| 14 | cargo build succeeds with zero warnings | VERIFIED | `cargo build` produces zero warnings (confirmed via `grep -c "^warning"` returning 0); `RuleLifetime` enum now contains only `Permanent` — `Turns` and `Triggers` variants removed in commit `2e42a38` |
 
-**Score:** 13/14 truths verified
+**Score:** 14/14 truths verified
 
 ### Required Artifacts
 
@@ -52,7 +50,7 @@ gaps:
 | `src/behavior.rs` | Behavior<S,M,I,P> trait definition | VERIFIED | 154 lines; imports Action and Mutation from new modules; before/after use Action<M> |
 | `src/action.rs` | Action<M> struct definition | VERIFIED | 84 lines; 3 fields only; Default impl present; tests pass |
 | `src/lib.rs` | Public API re-exports | VERIFIED | 14 lines; re-exports Mutation/Behavior/Action/Engine only |
-| `src/engine.rs` | Engine runtime with new types | VERIFIED (with warning) | Imports new types; add_behavior method; CommitFrame<S,M>; but has dead_code warning |
+| `src/engine.rs` | Engine runtime with new types and clean enum | VERIFIED | Imports new types; add_behavior method; CommitFrame<S,M>; RuleLifetime has only Permanent; zero warnings |
 | `examples/tictactoe.rs` | Updated tictactoe example | VERIFIED | impl Mutation<Game> for Op; cargo run succeeds with correct output |
 | `examples/backgammon.rs` | Updated backgammon example | VERIFIED | impl Mutation<BgState> for BackgammonOp; cargo run succeeds with correct output |
 | `Cargo.toml` | Version bump to 0.3.0 | VERIFIED | version = "0.3.0" confirmed |
@@ -79,35 +77,29 @@ gaps:
 | REN-01 | 04-01, 04-02 | Operation<S> renamed to Mutation<S> — apply/undo/hash_bytes preserved | SATISFIED | src/mutation.rs: `pub trait Mutation<S>: Clone` with all 3 methods; examples use `impl Mutation<...>` |
 | REN-02 | 04-01, 04-02 | Rule<S,O,E,P> renamed to Behavior<S,M,I,P> — before/after/id/priority preserved | SATISFIED | src/behavior.rs: `pub trait Behavior<S, M, I, P>` with all 4 methods; examples use `impl Behavior<...>` |
 | REN-03 | 04-01, 04-02 | Transaction<O> renamed to Action<M> — mutations vec, deterministic, cancelled preserved; irreversible removed | SATISFIED | src/action.rs: `pub struct Action<M>` with exactly mutations/deterministic/cancelled; no irreversible field anywhere |
-| REN-04 | 04-03 | All public re-exports, doctests, and both examples compile and pass under new names with no behavioral changes | SATISFIED (with warning gap) | lib.rs re-exports correct names only; `cargo test` 17 tests pass; both examples run with correct output; 1 build warning exists |
+| REN-04 | 04-01, 04-02, 04-03, 04-04 | All public re-exports, doctests, and both examples compile and pass under new names with no behavioral changes | SATISFIED | lib.rs re-exports correct names only; `cargo test` passes all tests (17 unit + 15 doc); both examples run with correct output; `cargo build` emits zero warnings |
 
-**Orphaned requirements check:** REQUIREMENTS.md maps REN-01 through REN-04 to Phase 4. All four are claimed by plans 04-01, 04-02, and 04-03. No orphaned requirements.
+**Orphaned requirements check:** REQUIREMENTS.md maps REN-01 through REN-04 to Phase 4. All four are claimed by plans 04-01, 04-02, 04-03, and 04-04. No orphaned requirements.
 
 ### Anti-Patterns Found
 
-| File | Line | Pattern | Severity | Impact |
-|------|------|---------|----------|--------|
-| src/engine.rs | 17-18 | `Turns(u32)` and `Triggers(u32)` defined but never constructed — dead_code warning | Warning | Causes `cargo build` to emit 1 warning, violating Plan 03 truth #4 |
-
-**Dead_code context:** The internal private `RuleLifetime` enum was intentionally kept in engine.rs per Plan 02 locked decisions ("Internal RuleLifetime kept as private enum for Phase 4 compatibility; Phase 5 will remove it"). However, since `add_behavior` always inserts `RuleLifetime::Permanent`, the `Turns` and `Triggers` variants are never constructed (only pattern-matched against — which Rust flags). The Plan 02 design note acknowledges this enum is transitional scaffolding, but the SUMMARY's claim that `cargo build` "succeeds with zero errors" is accurate — the warning was present at checkpoint time and noted in the SUMMARY.
+None. The previously flagged dead_code warning (`RuleLifetime::Turns` and `Triggers`) was resolved in commit `2e42a38` by removing the variants entirely. `cargo build` now emits zero warnings.
 
 ### Human Verification Required
 
-None required. All functional behaviors are verifiable through `cargo build`, `cargo test`, `cargo run --example`, and file inspection.
+None. All functional behaviors are verifiable through `cargo build`, `cargo test`, `cargo run --example`, and file inspection.
 
-### Gaps Summary
+### Gap Closure Summary
 
-The phase achieves its primary goal: all public-facing types and methods use the new domain vocabulary (Mutation, Behavior, Action, add_behavior) and both examples run with identical behavioral output. The API rename is complete and correct.
+**Previous gap (from initial verification):** `cargo build` emitted 1 `dead_code` warning for `RuleLifetime::Turns` and `Triggers` in engine.rs.
 
-One gap exists against the stated success criteria:
+**Resolution (plan 04-04, commit `2e42a38`):** The `Turns(u32)` and `Triggers(u32)` variants were removed from the private `RuleLifetime` enum, along with the unreachable dispatch branches that pattern-matched against them. The `RuleLifetime` enum now contains only `Permanent`. `cargo build` confirmed zero warnings post-fix.
 
-**Gap 1: cargo build warning (Plan 03 truth #4).** The build emits a `dead_code` warning for `RuleLifetime::Turns` and `RuleLifetime::Triggers` in engine.rs. This is a consequence of Plan 02's design decision to keep the internal `RuleLifetime` private enum for Phase 4/5 compatibility while removing all public construction of `Turns`/`Triggers` variants. The fix is either:
-- Add `#[allow(dead_code)]` to the `RuleLifetime` enum in engine.rs (appropriate given the documented intent to remove in Phase 5), OR
-- Remove `Turns` and `Triggers` from the enum entirely, since no code path constructs them after the rename (add_behavior always inserts Permanent; the pattern-match branches at lines 341 and 365 become unreachable dead code)
+**Regression check:** All 17 unit tests and 15 doc tests pass. Both examples run without behavioral changes. The removed variants were never constructed anywhere in the codebase; removing them and their dead match arms introduces no regression.
 
-The gap is low severity — it does not affect correctness, test results, or example behavior. However, it explicitly violates the Plan 03 success criterion of zero warnings.
+Phase 4 goal is fully achieved: all public-facing types and methods use the new domain vocabulary (Mutation, Behavior, Action, add_behavior), the build is clean with zero warnings, and both examples run with identical output to pre-rename behavior.
 
 ---
 
-_Verified: 2026-03-10_
+_Verified: 2026-03-11_
 _Verifier: Claude (gsd-verifier)_

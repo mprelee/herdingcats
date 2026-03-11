@@ -4,7 +4,7 @@ milestone: v1.1
 milestone_name: Rename & Reversibility
 status: planning
 stopped_at: Completed 04-core-rename-04-PLAN.md
-last_updated: "2026-03-11T01:03:59.471Z"
+last_updated: "2026-03-11T01:05:54.200Z"
 last_activity: 2026-03-10 — Phase 7 added; all 25/25 v1.1 requirements mapped across Phases 4-7
 progress:
   total_phases: 4
