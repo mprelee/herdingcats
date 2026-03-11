@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Rename & Reversibility
 status: planning
-stopped_at: Completed 04-core-rename-01-PLAN.md
-last_updated: "2026-03-11T00:38:20.297Z"
+stopped_at: Completed 04-core-rename-02-PLAN.md
+last_updated: "2026-03-11T00:44:00.241Z"
 last_activity: 2026-03-10 — Phase 7 added; all 25/25 v1.1 requirements mapped across Phases 4-7
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 04-core-rename P01 | 2 | 3 tasks | 4 files |
+| Phase 04-core-rename P02 | 3 | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,8 @@ Recent decisions affecting current work:
 - [Phase 04-core-rename]: irreversible field removed from Action<M>; undo barrier semantics handled in Phase 5
 - [Phase 04-core-rename]: RuleLifetime enum removed entirely; behaviors self-manage lifetime via is_active/on_dispatch/on_undo in Phase 5
 - [Phase 04-core-rename]: Interface-first rename: new API contracts (Mutation/Behavior/Action) established before engine wiring updated
+- [Phase 04-core-rename]: dispatch hashing gated by tx.deterministic (not tx.irreversible); commit gated by !tx.cancelled — separates two concerns that were incorrectly coupled
+- [Phase 04-core-rename]: PROP-03 turns/triggers tests deleted — tested public RuleLifetime behavior removed from API; internal RuleLifetime remains private in engine.rs until Phase 5
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None — v1.0 complete. v1.1 roadmap ready (Phases 4-7). Phase 4 unblocked.
 
 ## Session Continuity
 
-Last session: 2026-03-11T00:38:20.295Z
-Stopped at: Completed 04-core-rename-01-PLAN.md
+Last session: 2026-03-11T00:44:00.240Z
+Stopped at: Completed 04-core-rename-02-PLAN.md
 Resume file: None
