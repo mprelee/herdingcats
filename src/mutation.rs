@@ -70,8 +70,9 @@ pub trait Mutation<S>: Clone {
     /// Return a deterministic byte sequence that uniquely identifies this
     /// mutation variant and its data.
     ///
-    /// The engine XORs `fnv1a_hash(hash_bytes())` into its running `replay_hash`
-    /// for every committed, deterministic mutation. This means the byte sequence
+    /// The engine concatenates the `hash_bytes()` of all mutations in an action
+    /// into a single sequence, applies fnv1a to that sequence, and folds the
+    /// result into its running `replay_hash`. This means the byte sequence
     /// must be **pure and stable**: the same logical mutation must always return
     /// the same bytes across runs. Different mutation variants — and variants
     /// with different data (e.g., `Reset { prior: 3 }` vs `Reset { prior: 7 }`)
@@ -130,7 +131,7 @@ pub trait Mutation<S>: Clone {
     ///
     /// let mut tx = Action::new();
     /// tx.mutations.push(DiceOp::Roll);
-    /// engine.dispatch((), tx);
+    /// engine.dispatch_with((), tx);
     ///
     /// // DiceOp::Roll is not reversible, so the undo stack was cleared
     /// assert!(!engine.can_undo());

@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Rename & Reversibility
-status: complete
-stopped_at: Milestone shipped
-last_updated: "2026-03-11T04:30:00.000Z"
-last_activity: 2026-03-11 — v1.1 milestone complete; all 25/25 requirements satisfied
+milestone: v1.0
+milestone_name: milestone
+status: Milestone shipped
+stopped_at: "Completed quick-4 plan: update README to reflect current v1.1+ API"
+last_updated: "2026-03-11T05:37:00.000Z"
+last_activity: 2026-03-11 — Completed quick task 4: update README type params, terminology, and dispatch API docs
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 16
-  completed_plans: 16
+  total_phases: 6
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
   percent: 100
 ---
 
@@ -52,8 +52,16 @@ None.
 
 None — v1.1 shipped. Ready for next milestone planning.
 
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 2 | add return types to dispatch and related functions, dispatch returns Option<Action<M>> | 2026-03-11 | 7388df6 | [2-add-return-types-to-dispatch-and-related](.planning/quick/2-add-return-types-to-dispatch-and-related/) |
+| 3 | remove deterministic field, fix fnv1a replay hash, add dispatch(event)/dispatch_with(event, tx) API | 2026-03-11 | 31780cd | [3-remove-deterministic-flag-use-fnv1a-hash](.planning/quick/3-remove-deterministic-flag-use-fnv1a-hash/) |
+| 4 | update README to reflect Engine<S,M,I,P>, Action<M>, dispatch/dispatch_with/dispatch_preview API | 2026-03-11 | 0f0a7bd | [4-update-readme-md-to-reflect-current-api](.planning/quick/4-update-readme-md-to-reflect-current-api/) |
+
 ## Session Continuity
 
-Last session: 2026-03-11
-Stopped at: v1.1 milestone complete
+Last session: 2026-03-11T05:37:00.000Z
+Stopped at: Completed quick-4 plan: update README to reflect current v1.1+ API
 Resume file: None

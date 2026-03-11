@@ -43,10 +43,10 @@ struct CommitFrame<S, M> {
 ///
 /// `Engine<S, M, I, P>` is the central coordinator: it holds the current
 /// state `S`, a sorted list of [`Behavior`]s, and an undo/redo stack of commit
-/// frames. To advance state, callers construct an [`Action`] and pass
-/// it — along with an event value — to [`dispatch`](Engine::dispatch). The
-/// engine runs all enabled behaviors in priority order, applies the resulting
-/// mutations, and records the frame for undo. Direct mutation of
+/// frames. To advance state, call [`dispatch`](Engine::dispatch) with an event;
+/// behaviors inject mutations during the dispatch pipeline and the engine
+/// applies them, records the frame for undo. For pre-built actions use
+/// [`dispatch_with`](Engine::dispatch_with). Direct mutation of
 /// [`state`](Engine::state) is possible but bypasses the behavior system; use
 /// [`write`](Engine::write) for intentional resets.
 pub struct Engine<S, M, I, P>
@@ -112,13 +112,11 @@ where
     }
 
     /// Return the current replay hash — a running fingerprint over all
-    /// committed, deterministic mutations.
+    /// committed mutations.
     ///
     /// The replay hash is updated on every [`dispatch`](Engine::dispatch) call
-    /// where the action is `deterministic`. Two engine instances that have
-    /// processed the same sequence of deterministic mutations will have
-    /// identical replay hashes, regardless of any non-deterministic commits
-    /// in between.
+    /// that produces mutations. Two engine instances that have processed the
+    /// same sequence of mutations will have identical replay hashes.
     ///
     /// # Examples
     ///
@@ -138,7 +136,7 @@ where
     ///
     /// let mut tx = Action::new();
     /// tx.mutations.push(CounterOp::Inc);
-    /// engine.dispatch((), tx);
+    /// let _ = engine.dispatch_with((), tx);
     ///
     /// assert_ne!(engine.replay_hash(), hash_before);
     /// ```
@@ -221,12 +219,12 @@ where
     ///
     /// let mut tx = Action::new();
     /// tx.mutations.push(CounterOp::Inc);
-    /// engine.dispatch_preview((), tx);
+    /// let _preview = engine.dispatch_preview((), tx);
     ///
     /// // State is unchanged after preview
     /// assert_eq!(engine.state, 0);
     /// ```
-    pub fn dispatch_preview(&mut self, mut event: I, mut tx: Action<M>) {
+    pub fn dispatch_preview(&mut self, mut event: I, mut tx: Action<M>) -> Action<M> {
         let state_snapshot = self.state.clone();
         let hash_snapshot = self.replay_hash;
 
@@ -250,6 +248,7 @@ where
 
         self.state = state_snapshot;
         self.replay_hash = hash_snapshot;
+        tx
     }
 
     //
@@ -258,9 +257,50 @@ where
     // --------------------------------------------------------
     //
 
-    /// Dispatch `event` through all active behaviors, apply the resulting
-    /// mutations, and push a `CommitFrame` onto the undo stack if the action
-    /// is reversible.
+    /// Dispatch `event` through all active behaviors using a fresh, empty action.
+    ///
+    /// This is the ergonomic entry point for the common case where no pre-populated
+    /// action is needed. Behaviors inject mutations via their `before` hook.
+    /// For cases where you need to pass a pre-built action (e.g., with mutations
+    /// already pushed), use [`dispatch_with`](Engine::dispatch_with) instead.
+    ///
+    /// Returns `Some(action)` if mutations were applied, `None` if cancelled or
+    /// no mutations produced.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use herdingcats::{Engine, Mutation, Behavior, Action};
+    ///
+    /// #[derive(Clone)]
+    /// enum CounterOp { Inc }
+    /// impl Mutation<i32> for CounterOp {
+    ///     fn apply(&self, s: &mut i32) { *s += 1; }
+    ///     fn undo(&self, s: &mut i32)  { *s -= 1; }
+    ///     fn hash_bytes(&self) -> Vec<u8> { vec![1] }
+    /// }
+    ///
+    /// struct IncRule;
+    /// impl Behavior<i32, CounterOp, (), u8> for IncRule {
+    ///     fn id(&self) -> &'static str { "inc" }
+    ///     fn priority(&self) -> u8 { 0 }
+    ///     fn before(&self, _s: &i32, _e: &mut (), tx: &mut Action<CounterOp>) {
+    ///         tx.mutations.push(CounterOp::Inc);
+    ///     }
+    /// }
+    ///
+    /// let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0);
+    /// engine.add_behavior(IncRule);
+    /// let _ = engine.dispatch(());
+    /// assert_eq!(engine.state, 1);
+    /// ```
+    pub fn dispatch(&mut self, event: I) -> Option<Action<M>> {
+        self.dispatch_with(event, Action::new())
+    }
+
+    /// Dispatch `event` through all active behaviors with a custom pre-built action.
+    ///
+    /// For the common case with no pre-built action, use [`dispatch`](Engine::dispatch).
     ///
     /// Behaviors fire in ascending priority order during `before()`, then
     /// descending order during `after()`. If any behavior sets `tx.cancelled =
@@ -294,11 +334,11 @@ where
     ///
     /// let mut tx = Action::new();
     /// tx.mutations.push(CounterOp::Inc);
-    /// engine.dispatch((), tx);
+    /// let _action = engine.dispatch_with((), tx);
     ///
     /// assert_eq!(engine.state, 1);
     /// ```
-    pub fn dispatch(&mut self, mut event: I, mut tx: Action<M>) {
+    pub fn dispatch_with(&mut self, mut event: I, mut tx: Action<M>) -> Option<Action<M>> {
         let hash_before = self.replay_hash;
 
         for behavior in &self.behaviors {
@@ -322,13 +362,19 @@ where
         if !tx.cancelled && !tx.mutations.is_empty() {
             let is_reversible = tx.mutations.iter().all(|m| m.is_reversible());
 
-            if tx.deterministic {
-                for m in &tx.mutations {
-                    let h = fnv1a_hash(&m.hash_bytes());
-                    self.replay_hash ^= h;
-                    self.replay_hash = self.replay_hash.wrapping_mul(FNV_PRIME);
-                }
+            // Collect all mutation bytes for this action into one sequence
+            let mut action_bytes: Vec<u8> = Vec::new();
+            for m in &tx.mutations {
+                action_bytes.extend_from_slice(&m.hash_bytes());
             }
+            // Hash the full sequence with fnv1a, then fold into running hash
+            let action_hash = fnv1a_hash(&action_bytes);
+            self.replay_hash ^= action_hash;
+            self.replay_hash = self.replay_hash.wrapping_mul(FNV_PRIME);
+
+            // Clone tx after behaviors have run so the returned action reflects
+            // any behavior-injected mutations, before tx is moved into CommitFrame.
+            let committed_tx = tx.clone();
 
             if is_reversible {
                 let hash_after = self.replay_hash;
@@ -350,6 +396,10 @@ where
             for behavior in self.behaviors.iter_mut() {
                 behavior.on_dispatch();
             }
+
+            Some(committed_tx)
+        } else {
+            None
         }
     }
 
@@ -383,7 +433,7 @@ where
     ///
     /// let mut tx = Action::new();
     /// tx.mutations.push(CounterOp::Inc);
-    /// engine.dispatch((), tx);
+    /// let _ = engine.dispatch_with((), tx);
     /// assert_eq!(engine.state, 1);
     ///
     /// engine.undo();
@@ -438,7 +488,7 @@ where
     ///
     /// let mut tx = Action::new();
     /// tx.mutations.push(CounterOp::Inc);
-    /// engine.dispatch((), tx);
+    /// let _ = engine.dispatch_with((), tx);
     /// engine.undo();
     /// assert_eq!(engine.state, 0);
     ///
@@ -521,7 +571,7 @@ where
     ///
     /// let mut tx = Action::new();
     /// tx.mutations.push(CounterOp::Inc);
-    /// engine.dispatch((), tx);
+    /// let _ = engine.dispatch_with((), tx);
     /// assert_eq!(engine.state, 1);
     ///
     /// // Reset to a fresh state — undo history is cleared
@@ -574,7 +624,7 @@ where
     /// engine.add_behavior(NoRule);
     /// assert!(!engine.can_undo());
     ///
-    /// engine.dispatch((), Action::new());
+    /// let _ = engine.dispatch(());
     /// // Irreversible commit — undo barrier clears the stack
     /// assert!(!engine.can_undo());
     /// ```
@@ -722,7 +772,7 @@ mod tests {
 
         let mut tx = Action::new();
         tx.mutations.push(CounterOp::Inc);
-        engine.dispatch((), tx);
+        let _ = engine.dispatch_with((), tx);
         assert_eq!(engine.read(), 1);
 
         engine.undo();
@@ -788,13 +838,13 @@ mod tests {
         // Commit a reversible action first
         let mut tx1 = Action::new();
         tx1.mutations.push(MixedOp::Rev(CounterOp::Inc));
-        engine.dispatch((), tx1);
+        let _ = engine.dispatch_with((), tx1);
         assert_eq!(engine.state, 1);
 
         // Commit an irreversible action — undo stack must clear
         let mut tx2 = Action::new();
         tx2.mutations.push(MixedOp::Irrev);
-        engine.dispatch((), tx2);
+        let _ = engine.dispatch_with((), tx2);
         assert_eq!(engine.state, 99);
         assert_eq!(
             engine.undo_stack.len(),
@@ -816,13 +866,13 @@ mod tests {
         // Irreversible
         let mut tx1 = Action::new();
         tx1.mutations.push(MixedOp::Irrev);
-        engine.dispatch((), tx1);
+        let _ = engine.dispatch_with((), tx1);
         assert_eq!(engine.undo_stack.len(), 0);
 
         // Reversible after — should push to undo stack
         let mut tx2 = Action::new();
         tx2.mutations.push(MixedOp::Rev(CounterOp::Inc));
-        engine.dispatch((), tx2);
+        let _ = engine.dispatch_with((), tx2);
         assert_eq!(engine.undo_stack.len(), 1);
 
         // Undo the reversible action
@@ -839,7 +889,7 @@ mod tests {
         // Step A: dispatch a reversible-only action first
         let mut tx1 = Action::new();
         tx1.mutations.push(MixedOp::Rev(CounterOp::Inc));
-        engine.dispatch((), tx1);
+        let _ = engine.dispatch_with((), tx1);
         assert_eq!(engine.state, 1);
         assert_eq!(engine.undo_stack.len(), 1);
 
@@ -848,7 +898,7 @@ mod tests {
         let mut tx2 = Action::new();
         tx2.mutations.push(MixedOp::Rev(CounterOp::Inc));
         tx2.mutations.push(MixedOp::Irrev);
-        engine.dispatch((), tx2);
+        let _ = engine.dispatch_with((), tx2);
         assert_eq!(engine.state, 99);
         assert!(
             !engine.can_undo(),
@@ -867,8 +917,7 @@ mod tests {
         engine.add_behavior(NoRule);
 
         // Dispatch with no mutations
-        let tx = Action::new();
-        engine.dispatch((), tx);
+        let _ = engine.dispatch(());
 
         assert_eq!(engine.state, 0);
         assert!(
@@ -903,7 +952,7 @@ mod tests {
 
         let mut tx = Action::new();
         tx.mutations.push(CounterOp::Inc);
-        engine.dispatch((), tx);
+        let _ = engine.dispatch_with((), tx);
 
         // State change confirms dispatch ran; on_dispatch called (verified via
         // pattern: behavior compile-check + state correctness).
@@ -935,7 +984,7 @@ mod tests {
 
         let mut tx = Action::new();
         tx.mutations.push(CounterOp::Inc);
-        engine.dispatch((), tx);
+        let _ = engine.dispatch_with((), tx);
         assert_eq!(engine.state, 0); // cancelled — state unchanged
     }
 
@@ -960,8 +1009,7 @@ mod tests {
         engine.add_behavior(DispatchCounter { count: 0 });
 
         // Dispatch with no mutations
-        let tx = Action::new();
-        engine.dispatch((), tx);
+        let _ = engine.dispatch(());
         // State unchanged, no commit happened
         assert_eq!(engine.state, 0);
         assert_eq!(engine.undo_stack.len(), 0);
@@ -1003,7 +1051,7 @@ mod tests {
         // Dispatch one reversible action
         let mut tx = Action::new();
         tx.mutations.push(CounterOp::Inc);
-        engine.dispatch((), tx);
+        let _ = engine.dispatch_with((), tx);
         assert_eq!(counter.get(), 1, "on_dispatch should have fired once");
         assert!(engine.can_undo());
 
@@ -1057,7 +1105,7 @@ mod tests {
         // AlwaysActive.before() injects a second Inc → 2 mutations total → state = 2
         let mut tx1 = Action::new();
         tx1.mutations.push(CounterOp::Inc);
-        engine.dispatch((), tx1);
+        let _ = engine.dispatch_with((), tx1);
         assert_eq!(
             engine.state, 2,
             "first dispatch: both behaviors active, AlwaysActive added one Inc"
@@ -1069,7 +1117,7 @@ mod tests {
         // Action starts with one Inc → AlwaysActive adds one more → 2 mutations → state += 2 → state = 4
         let mut tx2 = Action::new();
         tx2.mutations.push(CounterOp::Inc);
-        engine.dispatch((), tx2);
+        let _ = engine.dispatch_with((), tx2);
         assert_eq!(
             engine.state, 4,
             "second dispatch: AlwaysActive before() still fires after SelfDeactivating deactivated"
@@ -1140,7 +1188,7 @@ mod tests {
             for _ in 0..(n + 2) {
                 let mut tx = Action::new();
                 tx.mutations.push(CounterOp::Inc);
-                engine.dispatch((), tx);
+                let _ = engine.dispatch_with((), tx);
             }
 
             // on_dispatch fires on ALL behaviors regardless of is_active()
@@ -1163,7 +1211,7 @@ mod tests {
             for _ in 0..(n + 1) {
                 let mut tx = Action::new();
                 tx.mutations.push(CounterOp::Inc);
-                engine2.dispatch((), tx);
+                engine2.dispatch_with((), tx);
             }
 
             // During first n dispatches: CountingBehavior2 is active → adds Dec → net 0 each time
@@ -1174,6 +1222,86 @@ mod tests {
                 "before() hook should be skipped after n={n} dispatches; state should be 1 (only Inc, no Dec)"
             );
         }
+    }
+
+    // --------------------------------------------------------
+    // replay_hash fnv1a accumulation tests (QUICK-3)
+    // --------------------------------------------------------
+
+    #[test]
+    fn replay_hash_same_single_mutation_same_across_engines() {
+        // Two engines dispatching the same single mutation arrive at the same replay_hash
+        let mut engine_a: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine_a.add_behavior(NoRule);
+        let mut engine_b: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine_b.add_behavior(NoRule);
+
+        let mut tx_a = Action::new();
+        tx_a.mutations.push(CounterOp::Inc);
+        let _ = engine_a.dispatch_with((), tx_a);
+
+        let mut tx_b = Action::new();
+        tx_b.mutations.push(CounterOp::Inc);
+        let _ = engine_b.dispatch_with((), tx_b);
+
+        assert_eq!(engine_a.replay_hash(), engine_b.replay_hash());
+    }
+
+    #[test]
+    fn replay_hash_same_two_mutations_same_across_engines() {
+        // Two engines dispatching same two mutations in same order arrive at same replay_hash
+        let mut engine_a: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine_a.add_behavior(NoRule);
+        let mut engine_b: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine_b.add_behavior(NoRule);
+
+        let mut tx_a = Action::new();
+        tx_a.mutations.push(CounterOp::Inc);
+        tx_a.mutations.push(CounterOp::Dec);
+        let _ = engine_a.dispatch_with((), tx_a);
+
+        let mut tx_b = Action::new();
+        tx_b.mutations.push(CounterOp::Inc);
+        tx_b.mutations.push(CounterOp::Dec);
+        let _ = engine_b.dispatch_with((), tx_b);
+
+        assert_eq!(engine_a.replay_hash(), engine_b.replay_hash());
+    }
+
+    #[test]
+    fn replay_hash_differs_when_mutations_differ() {
+        // replay_hash differs when mutations differ (sensitivity)
+        let mut engine_a: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine_a.add_behavior(NoRule);
+        let mut engine_b: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine_b.add_behavior(NoRule);
+
+        let mut tx_a = Action::new();
+        tx_a.mutations.push(CounterOp::Inc);
+        let _ = engine_a.dispatch_with((), tx_a);
+
+        let mut tx_b = Action::new();
+        tx_b.mutations.push(CounterOp::Dec);
+        let _ = engine_b.dispatch_with((), tx_b);
+
+        assert_ne!(engine_a.replay_hash(), engine_b.replay_hash());
+    }
+
+    #[test]
+    fn replay_hash_after_undo_matches_before_dispatch() {
+        // replay_hash after undo matches replay_hash before the undone dispatch
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(NoRule);
+
+        let hash_before = engine.replay_hash();
+
+        let mut tx = Action::new();
+        tx.mutations.push(CounterOp::Inc);
+        let _ = engine.dispatch_with((), tx);
+
+        engine.undo();
+
+        assert_eq!(engine.replay_hash(), hash_before);
     }
 }
 
@@ -1260,7 +1388,7 @@ mod props {
             for op in &ops {
                 let mut tx = Action::new();
                 tx.mutations.push(op.clone());
-                engine.dispatch((), tx);
+                let _ = engine.dispatch_with((), tx);
             }
 
             for _ in &ops {
@@ -1286,7 +1414,7 @@ mod props {
             for op in &ops {
                 let mut tx = Action::new();
                 tx.mutations.push(op.clone());
-                engine.dispatch((), tx);
+                let _ = engine.dispatch_with((), tx);
             }
 
             let state_before = engine.read();
@@ -1297,7 +1425,7 @@ mod props {
             for op in &ops {
                 preview_tx.mutations.push(op.clone());
             }
-            engine.dispatch_preview((), preview_tx);
+            let _ = engine.dispatch_preview((), preview_tx);
 
             // Direct observable comparison: state and hash must be unchanged
             prop_assert_eq!(
@@ -1321,11 +1449,11 @@ mod props {
             for op in &ops {
                 let mut tx_ref = Action::new();
                 tx_ref.mutations.push(op.clone());
-                reference_engine.dispatch((), tx_ref);
+                let _ = reference_engine.dispatch_with((), tx_ref);
 
                 let mut tx_actual = Action::new();
                 tx_actual.mutations.push(op.clone());
-                engine.dispatch((), tx_actual);
+                let _ = engine.dispatch_with((), tx_actual);
             }
 
             prop_assert_eq!(
@@ -1355,7 +1483,7 @@ mod props {
             }
             tx.cancelled = true;
 
-            engine.dispatch((), tx);
+            let _ = engine.dispatch_with((), tx);
 
             prop_assert_eq!(engine.read(), state_before);
             prop_assert_eq!(engine.replay_hash(), hash_before);
@@ -1433,7 +1561,7 @@ mod props {
             for op in &ops {
                 let mut tx = Action::new();
                 tx.mutations.push(op.clone());
-                engine.dispatch((), tx);
+                let _ = engine.dispatch_with((), tx);
                 if !op.is_reversible() {
                     prop_assert!(engine.undo_stack.is_empty(),
                         "undo stack must be empty immediately after irreversible commit");
@@ -1471,14 +1599,14 @@ mod props {
             for op in &prefix {
                 let mut tx = Action::new();
                 tx.mutations.push(op.clone());
-                engine.dispatch((), tx);
+                let _ = engine.dispatch_with((), tx);
             }
 
             // Dispatch one irreversible — this sets the undo barrier
             {
                 let mut tx = Action::new();
                 tx.mutations.push(MixedOp::Irrev);
-                engine.dispatch((), tx);
+                let _ = engine.dispatch_with((), tx);
             }
             prop_assert!(engine.undo_stack.is_empty(), "undo stack empty after barrier");
 
@@ -1486,7 +1614,7 @@ mod props {
             for op in &suffix {
                 let mut tx = Action::new();
                 tx.mutations.push(op.clone());
-                engine.dispatch((), tx);
+                let _ = engine.dispatch_with((), tx);
             }
 
             // Undo stack has exactly suffix.len() frames
@@ -1520,5 +1648,111 @@ mod props {
                 "state at barrier + suffix.len() should equal state after suffix"
             );
         }
+    }
+
+    // --------------------------------------------------------
+    // dispatch() return value tests
+    // --------------------------------------------------------
+
+    #[test]
+    fn dispatch_returns_none_when_cancelled() {
+        struct Canceller;
+        impl Behavior<i32, CounterOp, (), u8> for Canceller {
+            fn id(&self) -> &'static str {
+                "canceller"
+            }
+            fn priority(&self) -> u8 {
+                0
+            }
+            fn before(&self, _s: &i32, _e: &mut (), tx: &mut Action<CounterOp>) {
+                tx.cancelled = true;
+            }
+        }
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(Canceller);
+
+        let mut tx = Action::new();
+        tx.mutations.push(CounterOp::Inc);
+        let result = engine.dispatch_with((), tx);
+        assert!(result.is_none(), "cancelled dispatch should return None");
+    }
+
+    #[test]
+    fn dispatch_returns_none_when_mutations_empty() {
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(NoRule);
+
+        let result = engine.dispatch(()); // no mutations
+        assert!(
+            result.is_none(),
+            "empty-mutations dispatch should return None"
+        );
+    }
+
+    #[test]
+    fn dispatch_returns_some_with_mutations_when_committed() {
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(NoRule);
+
+        let mut tx = Action::new();
+        tx.mutations.push(CounterOp::Inc);
+        let result = engine.dispatch_with((), tx);
+        assert!(
+            result.is_some(),
+            "valid dispatch should return Some(action)"
+        );
+        let action = result.unwrap();
+        assert_eq!(action.mutations.len(), 1);
+        assert!(matches!(action.mutations[0], CounterOp::Inc));
+        assert_eq!(engine.read(), 1);
+    }
+
+    #[test]
+    fn dispatch_returns_some_for_irreversible_action() {
+        let mut engine: Engine<i32, MixedOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(MixedNoRule);
+
+        let mut tx = Action::new();
+        tx.mutations.push(MixedOp::Irrev);
+        let result = engine.dispatch_with((), tx);
+        assert!(
+            result.is_some(),
+            "irreversible but valid dispatch should return Some"
+        );
+        let action = result.unwrap();
+        assert_eq!(action.mutations.len(), 1);
+        assert!(matches!(action.mutations[0], MixedOp::Irrev));
+        // MixedOp::Irrev in props module applies *state += 0 (no-op state, marks irreversibility)
+        assert_eq!(engine.read(), 0);
+    }
+
+    // --------------------------------------------------------
+    // dispatch_preview() return value tests
+    // --------------------------------------------------------
+
+    #[test]
+    fn dispatch_preview_returns_action_after_behaviors() {
+        struct MutationInjector;
+        impl Behavior<i32, CounterOp, (), u8> for MutationInjector {
+            fn id(&self) -> &'static str {
+                "injector"
+            }
+            fn priority(&self) -> u8 {
+                0
+            }
+            fn before(&self, _s: &i32, _e: &mut (), tx: &mut Action<CounterOp>) {
+                tx.mutations.push(CounterOp::Dec);
+            }
+        }
+        let mut engine: Engine<i32, CounterOp, (), u8> = Engine::new(0i32);
+        engine.add_behavior(MutationInjector);
+
+        let mut tx = Action::new();
+        tx.mutations.push(CounterOp::Inc);
+        let preview = engine.dispatch_preview((), tx);
+        // Behavior injected a Dec, so preview should have 2 mutations
+        assert_eq!(preview.mutations.len(), 2);
+        // State should be unchanged
+        assert_eq!(engine.read(), 0);
     }
 }

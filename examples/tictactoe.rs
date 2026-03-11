@@ -250,9 +250,7 @@ fn main() {
     let moves = [0, 3, 1, 4, 2];
 
     for m in moves {
-        let tx = Action::new();
-
-        engine.dispatch(GameEvent::Play { idx: m }, tx);
+        let _ = engine.dispatch(GameEvent::Play { idx: m });
 
         println!("{}", engine.state);
 
