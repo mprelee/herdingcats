@@ -12,7 +12,7 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 - [x] **REN-01**: `Operation<S>` trait renamed to `Mutation<S>` — `apply`, `undo`, `hash_bytes` method signatures preserved
 - [x] **REN-02**: `Rule<S,O,E,P>` trait renamed to `Behavior<S,M,I,P>` — `before`, `after`, `id`, `priority` method signatures preserved
 - [x] **REN-03**: `Transaction<O>` renamed to `Action<M>` — `mutations` vec (was `ops`), `deterministic`, `cancelled` fields preserved; `irreversible` field removed
-- [ ] **REN-04**: All public re-exports in `lib.rs`, all doctests, and both examples compile and pass under new names with no behavioral changes
+- [x] **REN-04**: All public re-exports in `lib.rs`, all doctests, and both examples compile and pass under new names with no behavioral changes
 
 ### Reversibility
 
@@ -74,7 +74,7 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 | REN-01 | Phase 4 | Complete |
 | REN-02 | Phase 4 | Complete |
 | REN-03 | Phase 4 | Complete |
-| REN-04 | Phase 4 | Pending |
+| REN-04 | Phase 4 | Complete |
 | REV-01 | Phase 5 | Pending |
 | REV-02 | Phase 5 | Pending |
 | REV-03 | Phase 5 | Pending |

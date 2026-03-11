@@ -22,7 +22,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 
 **Milestone Goal:** Refine the public API naming and reversibility model to better reflect Mealy/Moore state machine design intent for turn-based games.
 
-- [ ] **Phase 4: Core Rename** - Rename Operation→Mutation, Rule→Behavior, Transaction→Action; remove RuleLifetime; all names consistent across codebase
+- [x] **Phase 4: Core Rename** - Rename Operation→Mutation, Rule→Behavior, Transaction→Action; remove RuleLifetime; all names consistent across codebase (completed 2026-03-11)
 - [ ] **Phase 5: Reversibility and Behavior Lifecycle** - Add is_reversible() to Mutation, derive Action reversibility, enforce undo barrier, add is_active/on_dispatch/on_undo to Behavior
 - [ ] **Phase 6: Tests and Examples** - Proptest coverage for new reversibility model, stateful behavior unit test, update both examples to compile and run under new API
 - [ ] **Phase 7: Documentation and Extended Tests** - Comprehensive rustdoc for all renamed types and new lifecycle methods; extended unit tests covering edge cases in reversibility and behavior lifecycle
@@ -96,7 +96,7 @@ Plans:
 | 1. Module Split and Foundation | v1.0 | 3/3 | Complete | 2026-03-09 |
 | 2. Engine Property Tests | v1.0 | 1/1 | Complete | 2026-03-09 |
 | 3. Backgammon Example and Integration Properties | v1.0 | 2/2 | Complete | 2026-03-09 |
-| 4. Core Rename | 2/3 | In Progress|  | - |
+| 4. Core Rename | 3/3 | Complete   | 2026-03-11 | - |
 | 5. Reversibility and Behavior Lifecycle | v1.1 | 0/TBD | Not started | - |
 | 6. Tests and Examples | v1.1 | 0/TBD | Not started | - |
 | 7. Documentation and Extended Tests | v1.1 | 0/TBD | Not started | - |
