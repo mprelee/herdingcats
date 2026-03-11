@@ -98,7 +98,7 @@ enum BackgammonOp {
     },
 }
 
-impl Operation<BgState> for BackgammonOp {
+impl Mutation<BgState> for BackgammonOp {
     fn apply(&self, state: &mut BgState) {
         match self {
             BackgammonOp::RollDiceOp { d1, d2 } => {
@@ -352,7 +352,7 @@ enum BackgammonEvent {
 
 struct RollDiceRule;
 
-impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for RollDiceRule {
+impl Behavior<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for RollDiceRule {
     fn id(&self) -> &'static str {
         "roll_dice"
     }
@@ -365,13 +365,11 @@ impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for RollDi
         &self,
         _state: &BgState,
         event: &mut BackgammonEvent,
-        tx: &mut Transaction<BackgammonOp>,
+        tx: &mut Action<BackgammonOp>,
     ) {
         if let BackgammonEvent::RollDice { d1, d2 } = event {
-            tx.ops.push(BackgammonOp::RollDiceOp { d1: *d1, d2: *d2 });
-            // RollDice is non-undoable: the engine will apply the ops but will NOT
-            // push a CommitFrame, so engine.undo() can never reach this event.
-            tx.irreversible = false;
+            tx.mutations.push(BackgammonOp::RollDiceOp { d1: *d1, d2: *d2 });
+            // Note: Phase 5 will add is_reversible() = false to RollDiceOp to make dice rolls non-undoable.
         }
         // Move events are ignored by this rule.
     }
@@ -385,7 +383,7 @@ impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for RollDi
 
 struct MoveRule;
 
-impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for MoveRule {
+impl Behavior<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for MoveRule {
     fn id(&self) -> &'static str {
         "move"
     }
@@ -398,7 +396,7 @@ impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for MoveRu
         &self,
         state: &BgState,
         event: &mut BackgammonEvent,
-        tx: &mut Transaction<BackgammonOp>,
+        tx: &mut Action<BackgammonOp>,
     ) {
         if let BackgammonEvent::Move {
             from,
@@ -441,9 +439,8 @@ impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for MoveRu
                 }
             };
 
-            tx.ops.push(op);
-            // Each Move uses default Transaction (irreversible = true), so the
-            // engine pushes its own CommitFrame and engine.undo() can reverse it.
+            tx.mutations.push(op);
+            // Each Move dispatches via Action::new() — reversible by default in Phase 4.
         }
         // RollDice events are ignored by this rule.
     }
@@ -458,15 +455,14 @@ impl Rule<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority> for MoveRu
 fn main() {
     let mut engine =
         Engine::<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority>::new(BgState::new());
-    engine.add_rule(RollDiceRule, RuleLifetime::Permanent);
-    engine.add_rule(MoveRule, RuleLifetime::Permanent);
+    engine.add_behavior(RollDiceRule);
+    engine.add_behavior(MoveRule);
 
     // --- Roll dice ---
-    // RollDiceRule.before() sets tx.irreversible = false (canonical: rules control behavior).
-    // We also set it here defensively for demo clarity — belt-and-suspenders.
+    // In Phase 4, dice rolls are undoable (a CommitFrame is pushed).
+    // Phase 5 will restore non-undoable dice rolls via is_reversible().
     println!("Rolling dice: 3, 5");
-    let mut tx = Transaction::new();
-    tx.irreversible = false;
+    let tx = Action::new();
     engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 }, tx);
     println!("{}", engine.state);
 
@@ -480,7 +476,7 @@ fn main() {
             to: 4,
             die_index: 0,
         },
-        Transaction::new(),
+        Action::new(),
     );
     println!("{}", engine.state);
 
@@ -493,15 +489,15 @@ fn main() {
             to: 2,
             die_index: 1,
         },
-        Transaction::new(),
+        Action::new(),
     );
     let state_before_undo = engine.read();
     println!("{}", engine.state);
 
     // --- Undo the second move ---
     // engine.undo() reverses the most recent CommitFrame (Move 2).
-    // RollDice was irreversible (no CommitFrame), so undo reaches Move 1 only after
-    // a second undo() call.
+    // In Phase 4, dice rolls are undoable — a second undo() call would undo Move 1,
+    // and a third would undo the dice roll.
     println!("Undoing last move (restoring die 1)");
     engine.undo();
     println!("{}", engine.state);
@@ -842,13 +838,13 @@ mod props {
         #[test]
         fn prop_per_die_undo(op in valid_move_op_strategy()) {
             let mut engine = Engine::<BgState, BackgammonOp, BackgammonEvent, BackgammonPriority>::new(BgState::new());
-            engine.add_rule(RollDiceRule, RuleLifetime::Permanent);
-            engine.add_rule(MoveRule, RuleLifetime::Permanent);
+            engine.add_behavior(RollDiceRule);
+            engine.add_behavior(MoveRule);
 
-            // First roll dice (non-undoable — sets up dice state)
+            // First roll dice (in Phase 4, dice rolls are undoable)
+            // Phase 5 will restore non-undoable dice rolls via is_reversible()
             {
-                let mut tx = Transaction::new();
-                tx.irreversible = false;
+                let tx = Action::new();
                 engine.dispatch(BackgammonEvent::RollDice { d1: 3, d2: 5 }, tx);
             }
 
@@ -864,7 +860,7 @@ mod props {
 
                 engine.dispatch(
                     BackgammonEvent::Move { from, to, die_index },
-                    Transaction::new(),
+                    Action::new(),
                 );
                 engine.undo();
 
