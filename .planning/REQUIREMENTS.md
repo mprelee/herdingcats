@@ -32,10 +32,10 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 
 ### Tests
 
-- [ ] **TEST-01**: All existing unit tests and proptest property tests updated for new names and passing
-- [ ] **TEST-02**: New proptest: any `Action` containing a mutation where `is_reversible() = false` results in an empty undo stack after commit
-- [ ] **TEST-03**: New proptest: reversible `Action`s committed after an irreversible one are individually undoable; `engine.undo()` halts at the barrier (undo stack empty)
-- [ ] **TEST-04**: New unit test: stateful `Behavior` using `on_dispatch` counter deactivates after N dispatches — replaces `RuleLifetime::Turns` proptest coverage
+- [x] **TEST-01**: All existing unit tests and proptest property tests updated for new names and passing
+- [x] **TEST-02**: New proptest: any `Action` containing a mutation where `is_reversible() = false` results in an empty undo stack after commit
+- [x] **TEST-03**: New proptest: reversible `Action`s committed after an irreversible one are individually undoable; `engine.undo()` halts at the barrier (undo stack empty)
+- [x] **TEST-04**: New unit test: stateful `Behavior` using `on_dispatch` counter deactivates after N dispatches — replaces `RuleLifetime::Turns` proptest coverage
 - [ ] **TEST-05**: `examples/backgammon.rs` updated — dice roll mutation returns `is_reversible() = false`; `RollDiceRule` uses `on_dispatch`/`is_active` instead of `RuleLifetime`; compiles and passes
 - [ ] **TEST-06**: `examples/tictactoe.rs` updated to new names; compiles and runs unchanged
 
@@ -85,10 +85,10 @@ Requirements for the Rename & Reversibility milestone. Continues numbering from 
 | LIFE-04 | Phase 5 | Complete |
 | LIFE-05 | Phase 5 | Complete |
 | LIFE-06 | Phase 5 | Complete |
-| TEST-01 | Phase 6 | Pending |
-| TEST-02 | Phase 6 | Pending |
-| TEST-03 | Phase 6 | Pending |
-| TEST-04 | Phase 6 | Pending |
+| TEST-01 | Phase 6 | Complete |
+| TEST-02 | Phase 6 | Complete |
+| TEST-03 | Phase 6 | Complete |
+| TEST-04 | Phase 6 | Complete |
 | TEST-05 | Phase 6 | Pending |
 | TEST-06 | Phase 6 | Pending |
 | DOC-01 | Phase 7 | Pending |
