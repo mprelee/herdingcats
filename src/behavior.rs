@@ -111,6 +111,32 @@ where
     /// }
     /// ```
     fn after(&self, _state: &S, _event: &I, _tx: &mut Action<M>) {}
+
+    /// Whether this behavior participates in the current dispatch.
+    ///
+    /// Returns `true` by default. When `false`, the engine skips `before()`
+    /// and `after()` for this behavior — the behavior is "sleeping" but not
+    /// removed. Sleeping behaviors still receive `on_dispatch()` and `on_undo()`
+    /// calls so they can track dispatch history and self-reactivate (e.g.,
+    /// a behavior that wakes after N turns).
+    fn is_active(&self) -> bool {
+        true
+    }
+
+    /// Called after each committed action (including redo) on ALL behaviors,
+    /// regardless of `is_active()`.
+    ///
+    /// Use this to update behavior-internal state in response to a commit
+    /// (e.g., decrement a charge counter, toggle an activation flag).
+    /// This hook fires in a separate pass after state mutations are applied,
+    /// avoiding borrow conflicts with the `&self` hooks `before` and `after`.
+    fn on_dispatch(&mut self) {}
+
+    /// Called after each undo on ALL behaviors, regardless of `is_active()`.
+    ///
+    /// Use this to reverse behavior-internal state changes made in `on_dispatch`.
+    /// Symmetry: `on_undo` reverses what `on_dispatch` advanced.
+    fn on_undo(&mut self) {}
 }
 
 // ============================================================
@@ -149,5 +175,45 @@ mod tests {
         let rule = TestRule;
         assert_eq!(rule.id(), "test");
         assert_eq!(rule.priority(), 0u8);
+    }
+
+    #[test]
+    fn is_active_default_true() {
+        let rule = TestRule;
+        assert!(rule.is_active());
+    }
+
+    #[test]
+    fn on_dispatch_default_noop() {
+        let mut rule = TestRule;
+        rule.on_dispatch(); // must compile and not panic
+    }
+
+    #[test]
+    fn on_undo_default_noop() {
+        let mut rule = TestRule;
+        rule.on_undo(); // must compile and not panic
+    }
+
+    struct CountingBehavior { dispatches: u32 }
+
+    impl Behavior<(), NoOp, (), u8> for CountingBehavior {
+        fn id(&self) -> &'static str { "counter" }
+        fn priority(&self) -> u8 { 0 }
+        fn is_active(&self) -> bool { self.dispatches < 3 }
+        fn on_dispatch(&mut self) { self.dispatches += 1; }
+        fn on_undo(&mut self) { if self.dispatches > 0 { self.dispatches -= 1; } }
+    }
+
+    #[test]
+    fn stateful_behavior_lifecycle() {
+        let mut b = CountingBehavior { dispatches: 0 };
+        assert!(b.is_active());
+        b.on_dispatch();
+        b.on_dispatch();
+        b.on_dispatch();
+        assert!(!b.is_active()); // deactivated after 3 dispatches
+        b.on_undo();
+        assert!(b.is_active()); // reactivated after undo
     }
 }
