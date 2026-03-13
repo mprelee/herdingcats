@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: milestone
 status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-03-13T23:43:14.050Z"
+stopped_at: Completed 01-core-types-01-01-PLAN.md
+last_updated: "2026-03-13T23:59:39.717Z"
 last_activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 2
+  completed_plans: 1
   percent: 0
 ---
 
@@ -50,6 +50,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01-core-types P01 | 1 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -62,6 +63,7 @@ Recent decisions affecting current work:
 - Static behavior set only: Preserves tight typing and determinism
 - CoW working state: Avoids performance penalty for large-state AI look-ahead
 - (order_key, behavior_name) ordering: Deterministic tiebreaker without relying on memory address
+- [Phase 01-core-types]: Used pub mod spec (not mod spec) in lib.rs to satisfy clippy dead_code without adding pub use — preserves Plan 02 flat re-export job
 
 ### Pending Todos
 
@@ -74,6 +76,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-13T23:43:14.049Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-core-types/01-CONTEXT.md
+Last session: 2026-03-13T23:59:39.715Z
+Stopped at: Completed 01-core-types-01-01-PLAN.md
+Resume file: None
