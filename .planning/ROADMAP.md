@@ -29,7 +29,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. `BehaviorResult<D, O>` variants `Continue(Vec<D>)` and `Stop(O)` are constructable and pattern-matchable
   4. `Outcome<F, N>` variants `Committed`, `Undone`, `Redone`, `NoChange`, `InvalidInput`, `Disallowed`, `Aborted` are all present and the type compiles
   5. `EngineError` is a distinct type from `Outcome` and is marked `#[non_exhaustive]`
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Define EngineSpec trait (CORE-01)
+- [ ] 01-02-PLAN.md — Define Behavior, BehaviorResult, Outcome, Frame, EngineError; wire lib.rs (CORE-02, CORE-03, CORE-04, CORE-05)
 
 ### Phase 2: Dispatch
 **Goal**: Callers can submit inputs and receive deterministic, atomically committed `Outcome` results with correct CoW semantics
@@ -72,7 +76,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Types | 0/? | Not started | - |
+| 1. Core Types | 0/2 | Not started | - |
 | 2. Dispatch | 0/? | Not started | - |
 | 3. History | 0/? | Not started | - |
 | 4. Examples and Tests | 0/? | Not started | - |
