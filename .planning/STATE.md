@@ -1,0 +1,63 @@
+# Project State
+
+## Project Reference
+
+See: .planning/PROJECT.md (updated 2026-03-13)
+
+**Core value:** An ordered set of statically known behaviors resolves every input deterministically, so complex rule interactions are never ambiguous.
+**Current focus:** Phase 1 - Core Types
+
+## Current Position
+
+Phase: 1 of 4 (Core Types)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
+
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0
+- Average duration: -
+- Total execution time: 0 hours
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+**Recent Trend:**
+- Last 5 plans: -
+- Trend: -
+
+*Updated after each plan completion*
+
+## Accumulated Context
+
+### Decisions
+
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
+
+- Build from scratch on maddie-edits: Prior v0.4.0 had fundamental design mismatches (behavior state outside main tree, address-based ordering, eager clone, public stacks)
+- Static behavior set only: Preserves tight typing and determinism
+- CoW working state: Avoids performance penalty for large-state AI look-ahead
+- (order_key, behavior_name) ordering: Deterministic tiebreaker without relying on memory address
+
+### Pending Todos
+
+None yet.
+
+### Blockers/Concerns
+
+- Phase 2 flag: `Apply<S>` and `Traced<T>` trait bounds need validation against backgammon use case before finalizing
+- Phase 3 flag: Snapshot undo memory implications for long AI-heavy sessions — acceptable for MVP, flag for v0.5.x
+
+## Session Continuity
+
+Last session: 2026-03-13
+Stopped at: Roadmap created — Phase 1 ready to plan
+Resume file: None
