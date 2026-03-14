@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: History** - Implement undo/redo with snapshot strategy and irreversibility boundary
 - [x] **Phase 4: Examples and Tests** - Implement tic-tac-toe and backgammon examples; write unit and property tests (completed 2026-03-14)
 - [x] **Phase 5: Architecture Alignment** - Align codebase with ARCHITECTURE.md: NonCommittedOutcome, Frame shape, EngineSpec bounds, trace contract, docs (completed 2026-03-14)
-- [ ] **Phase 6: Fill Gaps** - Replace Behavior trait with BehaviorDef struct, add trace contract tests, update docs
+- [x] **Phase 6: Fill Gaps** - Replace Behavior trait with BehaviorDef struct, add trace contract tests, update docs (completed 2026-03-14)
 
 ## Phase Details
 
@@ -134,4 +134,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. History | 0/2 | Not started | - |
 | 4. Examples and Tests | 3/3 | Complete    | 2026-03-14 |
 | 5. Architecture Alignment | 3/3 | Complete    | 2026-03-14 |
-| 6. Fill Gaps | 2/3 | In Progress|  |
+| 6. Fill Gaps | 2/3 | Complete    | 2026-03-14 |
