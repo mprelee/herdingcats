@@ -1,159 +1,251 @@
 # Pitfalls Research
 
-**Domain:** Rust library module refactoring + proptest property-based testing for stateful game engine
-**Researched:** 2026-03-08
-**Confidence:** HIGH (module splitting pitfalls from official docs + community; proptest pitfalls from official docs + 2024 real-world case studies)
+**Domain:** Rust deterministic turn-based game engine library (CoW working state, static generics, trait-based behaviors, undo/redo)
+**Researched:** 2026-03-13
+**Confidence:** HIGH (grounded in v0.4.0 known issues + verified Rust ecosystem patterns)
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Accidental Public API Break Via Incomplete Re-exports
+### Pitfall 1: Behavior State Living Outside the Main State Tree
 
 **What goes wrong:**
-When splitting `src/lib.rs` into modules, items that were previously public at the crate root become public inside a private submodule. If `lib.rs` does not re-export every previously-public item with `pub use`, callers get `use herdingcats::Transaction` -> "not found" errors. Because Rust's name resolution requires the full path to be public — not just the leaf item — a missed re-export is a semver-breaking change on a published crate.
+Behavior lifecycle data (enabled/disabled flags, counters, cooldowns, remaining uses) lives as mutable engine-internal fields rather than inside the user's `State` struct. Undo/redo restores committed state but leaves behavior internal state at the post-undo value. The behavior and the game state are now diverged. Serializability breaks entirely — you cannot snapshot the game and restore it faithfully.
 
 **Why it happens:**
-The split feels mechanical ("move code into files") but visibility in Rust is path-dependent. Developers check that the item has `pub` on it and assume that's enough; they don't verify that the path `herdingcats::X` still resolves.
+It feels natural to put "engine machinery" inside the engine struct. Behavior management feels like infrastructure, not game state. The mistake is treating behavior configuration as separate from the state it affects.
 
 **How to avoid:**
-- Keep `lib.rs` as a thin re-export façade: `pub use engine::Engine; pub use transaction::Transaction;` etc. for every type/trait currently in the public API.
-- After each module is extracted, run `cargo test --examples` immediately — the `examples/tictactoe.rs` file acts as an integration test for the full public surface.
-- Run `cargo doc --no-deps` and confirm every previously-documented item appears.
-- Optionally run `cargo semver-checks` (dev tool, not a project dependency) to catch missed re-exports before publishing.
+Enforce this at the type level: the engine should hold no mutable behavior configuration. All behavior-meaningful state lives in `S` (the user's state type). Behaviors are stateless objects whose only identity is their `name()` and `order_key()` values. Any effect they have on their own "lifetime" or "enabled" status must flow through a `Diff` applied to `S`.
 
 **Warning signs:**
-- `tictactoe.rs` fails to compile after a module is extracted — this is the canary.
-- `cargo doc` output is missing types that were present before.
-- Clippy `unreachable_pub` lint fires on an item inside a module that should be public externally — means the re-export chain is broken.
+- Engine struct has fields like `enabled: HashSet<&'static str>`, `lifetimes: HashMap<...>`, or similar
+- Undo test passes for domain state but behavior counters are wrong after undo
+- State snapshot/restore produces different behavior outcomes than the original run
 
-**Phase to address:** Module splitting phase (extracting `hash.rs`, `operation.rs`, `transaction.rs`, `rule.rs`, `engine.rs`). Each module extraction must end with a green `cargo test --examples` before proceeding to the next.
+**Phase to address:**
+Phase 1 (Core types and engine skeleton) — this invariant must be encoded in the type structure from the first commit; retrofitting is a rewrite.
 
 ---
 
-### Pitfall 2: `pub use` Glob Shadow Breaking Re-exports
+### Pitfall 2: Memory Address as Ordering Tiebreaker
 
 **What goes wrong:**
-If `lib.rs` uses a glob re-export (`pub use engine::*`) alongside an explicit item, Rust's name resolution can silently shadow or drop the glob-imported item. This was identified as the cause of hundreds of accidental semver breaks among the top 1000 Rust crates. The item disappears from the public API without a compile error in the library itself — downstream code breaks.
+When two behaviors share the same `order_key`, execution order is determined by memory address (pointer comparison on boxed trait objects). This is non-deterministic across runs, compilations, and platforms. Replay, save/load, and cross-machine tests all silently produce different results. The engine claims to be deterministic but is not.
 
 **Why it happens:**
-Glob re-exports are convenient but name resolution is greedy: adding any same-named item in the same scope shadows the glob import, with no warning by default.
+When implementing sorting on trait objects, comparing `Box<dyn Behavior>` pointers is the path of least resistance — it compiles and appears to produce stable ordering within a single run. The non-determinism only manifests across runs.
 
 **How to avoid:**
-Prefer explicit `pub use module::SpecificItem` re-exports in `lib.rs` rather than `pub use module::*`. Each re-exported item is named explicitly, making shadowing impossible and making the public API surface auditable by inspection.
+Use `(order_key, behavior_name)` as the composite sort key. `behavior_name()` must return a `&'static str` that is stable across compilations (string literal, not runtime-computed). Sort by `(order_key, name)` using `Ord`/`PartialOrd` on a tuple. Never touch pointer values for ordering.
 
 **Warning signs:**
-- `lib.rs` uses `pub use somemodule::*` patterns.
-- A new name added to any module or imported in `lib.rs` matches an existing item name.
-- `cargo semver-checks` reports a removed item.
+- Behavior trait lacks a `name()` method, or `name()` returns a heap-allocated `String` rather than `&'static str`
+- Sort comparator accesses pointer values
+- Replay test fails intermittently across runs
+- Two behaviors with same `order_key` produce different outcomes after `cargo build --release` vs debug
 
-**Phase to address:** Module splitting phase. Establish the explicit re-export convention from the first module extracted and never introduce glob re-exports.
+**Phase to address:**
+Phase 1 (Core types) — the `Behavior` trait definition must include `name() -> &'static str` and `order_key() -> K` from the start.
 
 ---
 
-### Pitfall 3: `cfg(test)` Visibility Cannot See `pub(crate)` Across Module Boundaries Without Proper Structure
+### Pitfall 3: Eager Full State Clone Instead of True CoW
 
 **What goes wrong:**
-When tests move from a single `lib.rs` into `#[cfg(test)] mod tests` blocks inside individual module files, internal helpers that were previously co-located become invisible. For example, `CommitFrame` is private in `lib.rs` now; tests in `engine.rs` can see it directly, but if a test helper lives in `hash.rs` and needs to invoke an engine internal, the paths break. Conversely, marking things `pub(crate)` to fix this can accidentally widen visibility beyond what is safe.
+The engine clones the entire state on every dispatch to create the working state, even for large state trees. AI look-ahead (calling dispatch speculatively dozens of times per turn) becomes catastrophically slow. For a game with a large board + many entities + behavior state, each speculative evaluation clones several kilobytes unnecessarily.
 
 **Why it happens:**
-In a single-file crate, everything is in the same module scope. After splitting, Rust's privacy rules apply: sibling modules cannot see each other's private items. Developers either over-use `pub` (widening the API) or under-use it (leaving tests that can't compile).
+`let mut working = self.state.clone()` is one line and obviously correct. True CoW requires more design: choosing what counts as a "substate," managing shared-vs-owned references. The eager clone is the MVP shortcut that stays forever.
 
 **How to avoid:**
-- For items that only tests need to cross-access: `pub(crate)` is the correct scope — it does not affect the external API.
-- Keep tests in the same file as the code they test: `#[cfg(test)] mod tests { use super::*; }` at the bottom of each `.rs` file. `super::*` imports all items from the enclosing module, including private ones, which is exactly what unit tests need.
-- Integration-style tests that need to compose multiple modules go in `tests/` (separate integration test files) using only the public API.
+Design the CoW boundary explicitly at the type level. The recommended approach:
+- Define `WorkingState<'a, S>` that holds a reference to committed state and a `Option<S>` for the dirty copy
+- On first write, clone committed into the `Option` and all subsequent reads/writes use the clone
+- On abort, drop the `Option` — committed state is untouched
+- On commit, `take()` the `Option` and replace committed state
+
+The substate granularity is user-defined but the engine API should make the CoW boundary visible as a type, not just a semantic convention.
 
 **Warning signs:**
-- A test file uses `crate::engine::CommitFrame` (tries to reach into private internal across crate path).
-- Adding `pub` to internal struct/enum to make a test compile — if it's not in the re-export list in `lib.rs`, that `pub` is useless externally, but it's a warning that the test structure is wrong.
-- Clippy `redundant_pub_crate` fires unexpectedly.
+- `WorkingState` is just `S` (no reference to committed, no dirty tracking)
+- `dispatch()` contains `state.clone()` before any behavior is evaluated
+- Preview/speculative dispatch benchmarks scale linearly with state size rather than with the number of mutations
 
-**Phase to address:** Module splitting phase. Establish the `#[cfg(test)] mod tests { use super::*; }` pattern in the first module and apply it consistently.
+**Phase to address:**
+Phase 2 (CoW working state) — this is a dedicated implementation concern and must not be deferred to "optimize later."
 
 ---
 
-### Pitfall 4: proptest Filtering (`prop_assume` / `.prop_filter`) Breaks Shrinking
+### Pitfall 4: `dispatch_preview()` with Side Effects (The Dirty Preview Anti-Pattern)
 
 **What goes wrong:**
-To generate a "valid game state" for backgammon (board positions that are physically possible), developers reach for `prop_assume!(is_valid_state(&state))` or `.prop_filter(...)`. This appears to work — it generates valid inputs — but it silently degrades shrinking. When proptest tries to simplify a failing test case, rejected values during shrinking cause it to "back away from simplification" rather than continue, so the minimized failing case is much larger and harder to debug than it should be.
+A "preview" or "dry run" dispatch that mutates behavior state (enabled flags, lifetimes, counters) even though it does not commit domain state. The preview appears to be read-only from the domain perspective but silently advances behavior bookkeeping. AI systems that call preview extensively corrupt behavior state without any indication. The bug is invisible until behavior interactions produce wrong results.
 
 **Why it happens:**
-Rejection sampling is conceptually simple. The connection between filtering and shrinking quality is non-obvious: the proptest book documents it but developers don't read that section until they encounter terrible shrinking output.
+The distinction between "speculative domain state" and "behavior metadata" is not enforced at the type level. If behavior management data lives in engine internals (see Pitfall 1), a preview can update those internals without touching the committed `State`. This looks like isolation at the domain level but is contamination at the behavior level.
 
 **How to avoid:**
-- **Do not use filtering to constrain generated game states.** Instead, build strategies that directly produce valid states by construction. For backgammon: generate a die roll (1..=6), then generate only moves that are legal given that roll, using `prop_flat_map` to make the second strategy depend on the first.
-- For the engine's undo/redo tests specifically: generate a sequence of `N` operations using `prop::collection::vec(valid_operation_strategy(), 0..10)` where `valid_operation_strategy()` only produces operations that are inherently valid, not a broad space filtered down.
-- Reserve `prop_assume!` for conditions that are cheap, rarely rejected (<10% of generated values), and not part of core invariants.
+Eliminate the concept of a side-effecting preview. With Pitfall 1 already solved (behavior state in `S`), a true preview is just a dispatch that discards its `WorkingState` instead of committing it. There is no separate preview path — failed or discarded dispatches are the preview. The engine has one dispatch algorithm; commit or discard is the only variation.
 
 **Warning signs:**
-- Test output shows minimal failing cases like "after 47 operations" when logically a 2-3 step case should exist.
-- Test suite is slow — `cargo test` takes minutes for a few proptest tests.
-- `PROPTEST_MAX_SHRINK_ITERS` has been increased as a "fix" — this treats the symptom, not the cause.
+- A `dispatch_preview()` method exists separately from `dispatch()`
+- Engine has separate "preview" vs "real" dispatch code paths
+- Behavior state differs between test runs that use preview vs test runs that don't
 
-**Phase to address:** Property testing phase (when writing undo/redo roundtrip tests and hash determinism tests). The strategy design must produce valid states by construction, not filtering.
+**Phase to address:**
+Phase 2 (Dispatch algorithm) — preview semantics must be defined before any dispatch code is written.
 
 ---
 
-### Pitfall 5: Incomplete Invariant Checking in State Machine Tests Hides Real Bugs
+### Pitfall 5: Generic Type Parameter Explosion (The Five-Type-Param Engine)
 
 **What goes wrong:**
-A proptest state machine test that only checks "the final state equals expected" misses bugs that occur mid-sequence and self-repair. For the `Engine`: a rule lifetime that decrements incorrectly during a sequence of dispatches might cancel out over N operations, making the final state correct while intermediate states are wrong. The real bug (double-decrement of `Triggers(n)`) goes undetected.
+The `Engine<S, I, D, O, K>` struct accumulates type parameters until instantiation requires specifying all five (or more). Library users write `Engine::<MyState, MyInput, MyDiff, MyOutcome, u32>::new(behaviors)` and the compiler demands turbofish syntax everywhere. Type inference fails in common patterns. The library becomes unusable without a macro or newtype wrapper. Third-party code that wraps the engine must re-propagate all type params.
 
 **Why it happens:**
-Writing a postcondition for every step is more work than writing one final assertion. Developers start with a single final check and never go back.
+Each generic parameter feels independently justified. `S` is the state type. `I` is input. `D` is diff. `O` is non-committed outcome. `K` is order key. All legitimate. The explosion happens because they appear individually on every method, impl block, and trait bound. As each is added, the others feel fixed, so the accumulation isn't noticed until the API is tried from the consumer side.
 
 **How to avoid:**
-- Check invariants **after each step** in stateful proptest tests, not only at the end. For the engine, after every `dispatch`, verify: (a) `replay_hash` matches a reference computation, (b) enabled rule set is consistent with lifetimes, (c) `undo_stack.len()` matches the number of irreversible non-cancelled dispatches.
-- The `proptest-stateful` crate provides `check_invariants()` called after each step — use this structure rather than hand-rolling a test loop.
-- For undo/redo roundtrip tests: assert state equality after each undo, not only after undoing all moves.
+Use an associated-type trait to bundle related types. Define a `GameSpec` or `EngineSpec` trait:
+
+```rust
+pub trait EngineSpec {
+    type State;
+    type Input;
+    type Diff;
+    type Outcome;
+    type OrderKey: Ord;
+}
+```
+
+Then `Engine<G: EngineSpec>` has one type parameter. The user implements `EngineSpec` once for their game and never writes turbofish again. This also makes trait bounds readable: `where G: EngineSpec` rather than `where S: ..., I: ..., D: ..., O: ...`.
 
 **Warning signs:**
-- A proptest test only has one `prop_assert_eq!` at the very end.
-- The test state struct is a single "expected output" rather than a model tracking intermediate states.
-- A bug is found manually in the tic-tac-toe example that the proptest tests did not catch.
+- `Engine` struct has more than two type parameters
+- Example code requires turbofish or explicit type annotations on every engine construction
+- `impl<S, I, D, O, K> Behavior<S, I, D, O, K> for MyBehavior` appears in user code
+- Compiler error messages contain five unresolved type variables simultaneously
 
-**Phase to address:** Property testing phase. The test structure (step-wise invariant checking) must be established before writing individual test cases, not retrofitted.
+**Phase to address:**
+Phase 1 (Core types) — the `EngineSpec` bundling decision must happen before any other type is defined. Retrofitting associated-type bundling onto an existing five-param API is a breaking change.
 
 ---
 
-### Pitfall 6: Testing `Box<dyn Rule>` Without `Clone` Support Blocks Strategy Composition
+### Pitfall 6: Undo Stack Exposed as Public Field
 
 **What goes wrong:**
-`Engine<S, O, E, P>` holds `rules: Vec<Box<dyn Rule<S, O, E, P>>>`. For proptest to generate `Engine` instances with rules pre-installed, you'd need to clone the engine or the rules. But `Box<dyn Rule>` is not `Clone` — `Rule` does not require `Clone` and adding it would break dyn-compatibility. This silently blocks the strategy `any::<Engine<...>>()` from being derivable, and attempts to derive `Arbitrary` for `Engine` will fail to compile.
+`undo_stack` and `redo_stack` are public fields on the engine struct. Tests and user code depend on direct field access. When the internal representation changes (from `Vec` to `VecDeque`, from frames to frame indices, from full copies to diffs), every consumer breaks. The "public field" becomes a defacto stable API that cannot be changed without breakage.
 
 **Why it happens:**
-The proptest `Arbitrary` derive works well for simple structs with all-clonable fields. The interaction between `Box<dyn Trait>` and proptest's `Clone`-requiring infrastructure is a compile-time surprise, not a runtime failure.
+Exposing fields is the quickest way to write tests that check stack depth or frame contents. There is no immediate visible cost. The cost only materializes when the implementation needs to change.
 
 **How to avoid:**
-- Do not attempt to implement `Arbitrary` for `Engine` directly. Instead, generate test engines by composing smaller strategies: generate the state `S`, generate a sequence of `Event + Transaction` pairs, construct the engine from scratch in the test body using `Engine::new(state)` and `engine.dispatch(...)`, and use `proptest`'s `prop_flat_map` to thread state through steps.
-- For tests that need pre-populated engines with rules: create concrete test rule structs (not trait objects) inside the test module — concrete types are `Clone`-able. Install them via `add_rule()` in test setup, not via strategy.
+Make stacks private from the first commit. Provide query methods: `undo_depth() -> usize`, `redo_depth() -> usize`, `can_undo() -> bool`, `can_redo() -> bool`. If tests need to inspect frame contents, expose `undo_peek() -> Option<&Frame>` rather than the entire stack. Tests written against these methods survive any internal representation change.
 
 **Warning signs:**
-- Attempt to `#[derive(proptest_derive::Arbitrary)]` on `Engine` — this will fail at compile time with a confusing error about `Clone`.
-- Any strategy that generates a `Box<dyn Rule>` — there is no sound way to do this without a dedicated trait extension.
+- Tests contain `engine.undo_stack.len()` or `engine.redo_stack[0]`
+- `undo_stack` or `redo_stack` appear in `pub` struct fields
+- `clippy` shows `pub field` warnings on history-related fields
 
-**Phase to address:** Property testing phase, specifically at the start when designing test helpers. Establish the "build engine from generated moves, not generated engines" pattern first.
+**Phase to address:**
+Phase 3 (Undo/redo) — define the query API surface first, implement internals behind it.
 
 ---
 
-### Pitfall 7: Undo/Redo Tests That Only Check State, Not Hash
+### Pitfall 7: Irreversibility Designation with No Compile-Time Enforcement
 
 **What goes wrong:**
-`Engine` maintains `replay_hash` as an independent invariant. A test that dispatches N operations, undoes them all, and asserts `engine.state == initial_state` can pass while `engine.replay_hash` is wrong. The undo path correctly restores `state_hash_before` from `CommitFrame`, but any test that doesn't assert `replay_hash` after undo never validates this. A bug in the hash restore path is invisible until replay-based features break.
+The library user designates certain frames as irreversible by implementing a trait method or passing a flag, but nothing stops them from forgetting. A dice-roll outcome that should erase undo history does not, and players can undo past the randomness reveal. The game appears to support undo correctly but silently allows cheating. The library cannot enforce irreversibility semantics on behalf of the user.
 
 **Why it happens:**
-`engine.state` is the visible, intuitive thing to check. `replay_hash` is internal (`pub` but not in the "obvious" assertion list) and easy to overlook.
+Irreversibility is a domain concept the engine cannot know about. The natural solution is a trait method with a default return value of `false` (reversible). Developers implement their `Frame` or `Input` types and never override the method because the default "works" — undo just happens to function for their test cases.
 
 **How to avoid:**
-- In every undo/redo roundtrip property test, assert both `engine.read() == original_state` AND `engine.replay_hash() == original_hash` after undoing all operations.
-- Define a helper `engine_snapshot(e: &Engine<...>) -> (S, u64)` that captures both, and use it as the baseline for comparison.
+Make irreversibility explicit at the call site rather than implicit via default. Design `dispatch()` to accept a `Reversibility` parameter or require the user to specify it per dispatch. Consider:
+
+```rust
+pub enum Reversibility {
+    Reversible,
+    Irreversible,
+}
+
+fn dispatch(&mut self, input: I, reversibility: Reversibility) -> Result<Outcome<...>, EngineError>
+```
+
+This forces every `dispatch()` call to make a deliberate choice. Users cannot forget — the code will not compile without specifying reversibility. Document clearly: "dice rolls and public information reveals must be `Irreversible`."
 
 **Warning signs:**
-- Undo tests only assert on `engine.read()`.
-- `replay_hash()` is not referenced anywhere in the test module.
+- `is_reversible()` is a trait method with a default implementation of `true`
+- No tests verify that undo history is cleared after an irreversible commit
+- Tic-tac-toe and backgammon examples do not demonstrate the irreversibility boundary
 
-**Phase to address:** Property testing phase. Codify the dual-assertion pattern in the first undo roundtrip test.
+**Phase to address:**
+Phase 3 (Undo/redo) — irreversibility must be designed into the `dispatch()` signature, not retrofitted.
+
+---
+
+### Pitfall 8: Outcome/EngineError Conflation
+
+**What goes wrong:**
+Domain-level non-committed outcomes (`Disallowed`, `InvalidInput`, `Aborted`) are returned as `Err(EngineError::...)` rather than `Ok(Outcome::...)`. Library users cannot distinguish "the engine is broken" from "the move was illegal." Error handling code catches genuine engine panics and valid game rejections in the same branch. Callers write `if let Err(e) = engine.dispatch(...)` and handle illegal moves the same way they handle engine bugs.
+
+**Why it happens:**
+`Result<T, E>` maps naturally to "success / failure." A rejected move feels like failure, so `Err` feels right. The subtlety that `Disallowed` is a successful, expected, domain-level outcome — not an error — requires deliberate design.
+
+**How to avoid:**
+Hold the line: `dispatch()` returns `Result<Outcome<F, N>, EngineError>`. `Outcome` holds all domain results including non-committed ones. `EngineError` is strictly reserved for impossible internal states, corrupted engine invariants, or bugs. Document this distinction explicitly in rustdoc on `EngineError`. Add `#[non_exhaustive]` to `EngineError` so future engine failure modes remain additive.
+
+**Warning signs:**
+- `EngineError` variants include names like `Disallowed`, `InvalidInput`, `NothingToUndo`
+- `match engine.dispatch(...)` arms handling normal game logic appear in `Err(_)` branches
+- `EngineError` documentation describes game-rule rejection scenarios
+
+**Phase to address:**
+Phase 1 (Core types) — the `Outcome` and `EngineError` type definitions establish this boundary. Get it right before any dispatch logic is written.
+
+---
+
+### Pitfall 9: Behaviors Mutating Working State Directly
+
+**What goes wrong:**
+A `Behavior` implementation receives `&mut WorkingState` and writes to it directly instead of returning diffs. The engine cannot accumulate the diff record for the `Frame`. Trace cannot be generated at the moment of mutation. The invariant "any diff that mutates state must append a trace entry" is silently violated. Undo/redo becomes incorrect because the `Frame` diff record is incomplete.
+
+**Why it happens:**
+Passing `&mut state` to a behavior is simpler than designing a `Diff` enum and wiring diff application through the engine. If the `evaluate()` signature accepts a mutable reference "temporarily for convenience," the diff pathway atrophies and gets removed.
+
+**How to avoid:**
+The `evaluate()` method signature must be `fn evaluate(&self, input: &I, state: &S) -> BehaviorResult<D, O>`. Both `input` and `state` are immutable references. Behaviors are structurally prevented from mutating state — they can only return diffs. This is not a convention or a documentation rule; it is enforced by the type system.
+
+**Warning signs:**
+- `evaluate()` signature contains `state: &mut S` or `working: &mut WorkingState<S>`
+- Behavior implementations contain `state.something = new_value` rather than `Continue(vec![Diff::Something(new_value)])`
+- Frame diff list is empty for dispatches that visibly changed state
+
+**Phase to address:**
+Phase 1 (Core types) — the `Behavior` trait signature is the prevention. If `evaluate()` takes `&mut`, this pitfall is already present.
+
+---
+
+### Pitfall 10: HashMap Iteration Non-Determinism in Behavior Storage
+
+**What goes wrong:**
+Behaviors or behavior state are stored in a `HashMap<&'static str, Box<dyn Behavior>>` (or similar). Iteration order is random across runs due to Rust's randomized SipHash seed. The engine iterates the map to produce the ordered behavior sequence, but iteration order varies. Games appear deterministic within a single run but differ across runs. Replay tests intermittently fail.
+
+**Why it happens:**
+`HashMap` is the standard Rust collection for key-based lookup. It feels natural to store behaviors keyed by name. The non-determinism is subtle — `HashMap` documentation warns about it, but the link between storage choice and ordering-based dispatch is easy to miss.
+
+**How to avoid:**
+Store behaviors in a `Vec` sorted by `(order_key, name)` at construction time. Never use `HashMap` for anything that feeds into dispatch ordering. If name-based lookup is needed, build a secondary `HashMap<&'static str, usize>` index pointing into the `Vec`. The `Vec` is the canonical ordered sequence; the map is a lookup cache only.
+
+**Warning signs:**
+- Behavior storage uses `HashMap`, `BTreeMap` (safer but still a design smell), or any collection where iteration order is not explicitly sorted
+- Behavior ordering is derived from iteration rather than from an explicitly sorted sequence
+- Replay determinism tests pass locally but fail in CI with different build environments
+
+**Phase to address:**
+Phase 1 (Core types) — the behavior storage data structure must be a sorted `Vec` by design.
 
 ---
 
@@ -161,23 +253,12 @@ The proptest `Arbitrary` derive works well for simple structs with all-clonable 
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| `pub use module::*` glob re-exports in `lib.rs` | Less typing during split | Shadowing bugs, hard to audit public surface | Never — use explicit re-exports |
-| `prop_assume!` to filter invalid game states | Simple to write | Broken shrinking, slow CI, hard-to-debug failures | Only when rejection rate is <5% and invariant is peripheral |
-| Single final assertion in stateful tests | Fast to write | Misses mid-sequence bugs that cancel out | Never for engine invariants |
-| Testing only `engine.state`, not `replay_hash` | Less to type | Hash bugs invisible until replay features | Never — always assert both |
-| Marking internal structs `pub` to satisfy test visibility | Test compiles | Widens API unintentionally, confuses future readers | Never — use `pub(crate)` or `use super::*` in test submodule |
-
----
-
-## Integration Gotchas
-
-This project has no external service integrations. The relevant "integration" is between proptest and the engine's generic type parameters.
-
-| Integration | Common Mistake | Correct Approach |
-|-------------|----------------|------------------|
-| proptest + `Engine<S,O,E,P>` | Trying to generate `Engine` instances directly via `Arbitrary` | Generate `(S, Vec<(E, Transaction<O>)>)`, build engine in test body |
-| proptest + `Box<dyn Rule>` | Trying to make rules part of a generated strategy | Use concrete test rule types inside `#[cfg(test)]`, not trait objects |
-| `cargo test` + `examples/` | Extracting modules without running `--examples` after each step | Make `cargo test --examples` part of the definition of "done" for each module extraction |
+| Eager full state clone instead of CoW | Correct, simple, one line | O(state_size) per speculative dispatch; AI look-ahead unusable | Never for this project; CoW is a stated requirement |
+| Public undo/redo stack fields | Tests can check depth directly | All representation changes break callers | Never; provide query methods instead |
+| Default `is_reversible() -> true` | User only overrides when needed | Silent undo-past-randomness bugs in games with dice/hidden info | Never for irreversibility; force explicit call-site choice |
+| `dyn Behavior` over static generics | Simpler homogeneous collection | vtable overhead per dispatch; prevents monomorphization optimizations | Only if compile times become intolerable; measure first |
+| Five separate type parameters on Engine | Each param independently justified | Turbofish required everywhere; impossible ergonomics | Never; bundle via `EngineSpec` associated-type trait |
+| Behavior evaluation takes `&mut State` | Fewer intermediary types needed | Breaks diff accumulation, trace generation, Frame correctness | Never; immutable evaluate is a core invariant |
 
 ---
 
@@ -185,20 +266,23 @@ This project has no external service integrations. The relevant "integration" is
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| `prop_assume!` with >10% rejection rate | Tests take 5-10x longer, CI timeouts | Build valid-state strategies by construction via `prop_flat_map` | From the first test run; gets worse with more complex state |
-| Default proptest case count (256) for heavy state machine tests | Tests time out in CI | Tune `ProptestConfig::with_cases(50)` for heavy multi-step tests; keep high for cheap unit tests | When each test case involves 10+ engine dispatches |
-| Cloning full `Engine` state for every undo snapshot | Acceptable now; problematic with large game states | Not a current concern for backgammon/tictactoe scale | Only relevant at 10K+ element state, not applicable here |
+| Full state clone on every dispatch | AI look-ahead benchmarks degrade with state size; profiler shows `Clone::clone` dominating dispatch time | Implement CoW `WorkingState<'a, S>` that lazily clones substates on first write | At ~5+ speculative dispatches per turn with state > 1KB |
+| Monomorphization explosion from five type params | Compilation times grow superlinearly as behaviors are added; binary size inflates | Bundle types via `EngineSpec`; apply the inner-function extraction pattern for non-generic logic | At ~10+ distinct `Engine` instantiation sites in user code |
+| Sorting behaviors on every dispatch | Dispatch latency increases with behavior count; profiler shows `sort` in dispatch hot path | Sort behaviors once at engine construction; store as pre-sorted `Vec` | At ~50+ behaviors per engine instance |
+| Re-applying full diff list for undo | Undo latency grows linearly with diff count per frame | Store state snapshots at irreversibility boundaries; diff lists stay bounded between boundaries | At ~100+ diffs per frame or ~1000+ frames in undo history |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Module splitting:** All modules extracted, but `pub use` re-exports in `lib.rs` verified by compiling `examples/tictactoe.rs` — do not rely on `cargo check` of the library alone.
-- [ ] **proptest undo tests:** Tests assert both `engine.read()` and `engine.replay_hash()` after undo, not only state equality.
-- [ ] **Rule lifetime correctness:** Tests exercise `RuleLifetime::Triggers(n)` with n=1 (expires after one use) — this is the edge case most likely to have an off-by-one.
-- [ ] **Cancelled transaction invariant:** A dispatched transaction with `tx.cancelled = true` must not push a `CommitFrame` — proptest test explicitly generates cancelled transactions and asserts undo stack length is unchanged.
-- [ ] **`dispatch_preview` has no side effects:** Property test verifies that `replay_hash` and `lifetimes` are identical before and after `dispatch_preview` — the snapshot/restore in that path is easy to break.
-- [ ] **`write()` resets all stacks:** Test verifies `undo_stack` and `redo_stack` are empty and `replay_hash == FNV_OFFSET` after `engine.write(snapshot)`.
+- [ ] **CoW working state:** Dispatch appears to work but uses eager clone — verify with a large state benchmark that shows flat dispatch time vs state size
+- [ ] **Deterministic ordering:** Behaviors execute in correct order in happy-path tests, but equal-priority behaviors use pointer tiebreaker — verify with two behaviors at same `order_key` that produce conflicting diffs, check order matches `(order_key, name)` not pointer ordering
+- [ ] **Undo correctness:** Undo restores domain state but behavior counters/cooldowns remain at post-undo values — verify behavior state in `S` changes after undo, not just domain fields
+- [ ] **Irreversibility boundary:** `dispatch()` commits correctly but irreversible flag has no effect — verify that undo history is empty after an irreversible dispatch
+- [ ] **Atomicity:** Dispatch returns a result but failed mid-dispatch dispatches leave partial working state visible — verify that a `Stop(Disallowed)` from behavior N does not affect committed state even if behaviors 1..N-1 returned diffs
+- [ ] **Frame diff completeness:** Frame is committed but diff list is empty or partial — verify that replaying frame diffs from a prior committed state reaches the same committed state
+- [ ] **Trace coupling:** Trace is produced but not synchronized with diff application order — verify trace entry order matches the order diffs were applied, not the order behaviors were evaluated
+- [ ] **EngineError isolation:** Rejected dispatches are recoverable, but they return `Err(EngineError::...)` instead of `Ok(Outcome::...)` — verify that `Disallowed` and `InvalidInput` outcomes appear in `Ok`, not `Err`
 
 ---
 
@@ -206,11 +290,13 @@ This project has no external service integrations. The relevant "integration" is
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Missed re-export breaks public API | LOW (before publish) / HIGH (after publish, requires semver major bump) | Add missing `pub use` in `lib.rs`, compile examples, re-publish patch if not yet released |
-| Glob shadow breaks re-export | MEDIUM | Replace `pub use module::*` with explicit re-exports, verify with `cargo semver-checks` |
-| `prop_assume` degrading shrinking | MEDIUM | Rewrite strategy using `prop_flat_map` to generate valid states by construction; existing tests remain valid |
-| Missing hash assertion in undo tests | LOW | Add `engine.replay_hash()` assertion to existing tests; mechanically straightforward |
-| Wrong test visibility structure | LOW | Move test helpers into `#[cfg(test)] mod tests { use super::*; }` in the relevant file |
+| Behavior state in engine internals | HIGH | Rewrite: move all engine-internal behavior data into user `State`; redesign diff types to carry behavior mutations; update all tests |
+| Memory address ordering tiebreaker | MEDIUM | Add `name() -> &'static str` to `Behavior` trait; update sort comparator to use `(order_key, name)` tuple; verify all tests still pass |
+| Eager full clone | MEDIUM | Design `WorkingState<'a, S>` wrapper; thread it through dispatch; replace `state.clone()` call sites |
+| Generic type parameter explosion | HIGH | Introduce `EngineSpec` trait; migrate all existing type parameters to associated types; this is a breaking API change |
+| Public undo/redo stacks | LOW | Make fields private; add query methods; update test assertions to use methods |
+| Irreversibility defaults | MEDIUM | Change `dispatch()` signature to require explicit `Reversibility` arg; update all call sites; add tests for history erasure |
+| `Outcome`/`EngineError` conflation | MEDIUM | Audit `EngineError` variants; move domain-level outcomes to `Outcome` enum; update all `match` arms in user code |
 
 ---
 
@@ -218,30 +304,31 @@ This project has no external service integrations. The relevant "integration" is
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| Incomplete re-exports breaking public API | Module splitting — each extraction | `cargo test --examples` green after every module move |
-| Glob shadow via `pub use *` | Module splitting — establish convention at start | Inspect `lib.rs`: every re-export is explicit and named |
-| `cfg(test)` visibility across modules | Module splitting — first module sets pattern | All test modules use `use super::*`; no `pub` added solely for tests |
-| `prop_assume` filter breaking shrinking | Property testing — strategy design before first test | No `prop_assume!` in engine property tests; `prop_flat_map` used for dependent generation |
-| Incomplete per-step invariant checking | Property testing — test structure design | Every stateful test checks invariants inside the operation loop, not only after |
-| `Box<dyn Rule>` blocking `Arbitrary` | Property testing — first proptest helper written | No `Arbitrary` impl on `Engine`; engine is built from generated operations in test body |
-| Undo tests missing hash assertion | Property testing — first undo roundtrip test | `replay_hash()` appears in every undo/redo assertion |
-| `dispatch_preview` side-effect regression | Property testing — when preview test is written | Snapshot-equality test for `replay_hash` and `lifetimes` before/after `dispatch_preview` |
+| Behavior state outside main state tree | Phase 1: Core types | `Engine` struct fields contain no behavior metadata; behavior state mutations flow through `Diff` |
+| Memory address ordering tiebreaker | Phase 1: Core types | `Behavior::name()` returns `&'static str`; sort uses `(order_key, name)` tuple; two equal-priority behaviors execute in alphabetical order |
+| Eager full state clone | Phase 2: CoW working state | Benchmark: dispatch time flat vs state size; `dispatch()` source contains no `state.clone()` |
+| Dirty preview side effects | Phase 2: Dispatch algorithm | No `dispatch_preview()` method exists; discarded dispatches leave committed state identical to pre-dispatch |
+| Generic type parameter explosion | Phase 1: Core types | `Engine` has exactly one type param (`G: EngineSpec`); example code requires no turbofish |
+| Public undo/redo stacks | Phase 3: Undo/redo | `undo_stack` and `redo_stack` do not appear in `pub` struct fields; tests use `undo_depth()` |
+| Irreversibility with no enforcement | Phase 3: Undo/redo | `dispatch()` requires explicit `Reversibility` argument; irreversible dispatch erases history in test |
+| Outcome/EngineError conflation | Phase 1: Core types | `Disallowed`, `InvalidInput`, `Aborted` appear only in `Outcome`; `EngineError` variants are engine-internal only |
+| Behaviors mutating working state | Phase 1: Core types | `Behavior::evaluate()` signature takes `&S` not `&mut S`; clippy confirms no interior mutability on state in evaluate |
+| HashMap non-determinism | Phase 1: Core types | Behavior storage is `Vec` sorted at construction; no `HashMap` in dispatch-ordering codepath |
 
 ---
 
 ## Sources
 
-- [Proptest Filtering Documentation — official proptest book](https://altsysrq.github.io/proptest-book/proptest/tutorial/filtering.html) — HIGH confidence
-- [Proptest State Machine Testing — official proptest book](https://proptest-rs.github.io/proptest/proptest/state-machine.html) — HIGH confidence
-- [Stateful Property Testing in Rust — Readyset Engineering Blog, 2024](https://readyset.io/blog/stateful-property-testing-in-rust) — HIGH confidence (verified against proptest docs)
-- [Property Testing Stateful Code in Rust — rtpg.co, 2024](https://rtpg.co/2024/02/02/property-testing-with-imperative-rust/) — MEDIUM confidence (practitioner case study)
-- [Breaking semver in Rust by adding a private type or import — predr.ag](https://predr.ag/blog/breaking-semver-in-rust-by-adding-private-type-or-import/) — HIGH confidence (cargo-semver-checks maintainer)
-- [SemVer in Rust: Tooling, Breakage, and Edge Cases — FOSDEM 2024](https://predr.ag/blog/semver-in-rust-tooling-breakage-and-edge-cases/) — HIGH confidence
-- [Two ways of interpreting visibility in Rust — Kobzol's blog, 2025](https://kobzol.github.io/rust/2025/04/23/two-ways-of-interpreting-visibility-in-rust.html) — MEDIUM confidence (community blog, verified against Rust reference)
-- [Visibility and Privacy — The Rust Reference](https://doc.rust-lang.org/reference/visibility-and-privacy.html) — HIGH confidence (official)
-- [SemVer Compatibility — The Cargo Book](https://doc.rust-lang.org/cargo/reference/semver.html) — HIGH confidence (official)
-- Code analysis of `src/lib.rs` — direct inspection of `CommitFrame`, `dispatch`, `dispatch_preview`, `undo`, `redo` implementations
+- CONCERNS.md — v0.4.0 known issues: behavior lifetimes as engine internals, memory-address tiebreaker, eager clone, public stacks, `Option<Action<M>>` divergence
+- ARCHITECTURE.md — v0.5.0 design spec: CoW semantics, `(order_key, behavior_name)` ordering, `Outcome`/`EngineError` split, behavior state in main state tree
+- [Improving overconstrained Rust library APIs — LogRocket Blog](https://blog.logrocket.com/improving-overconstrained-rust-library-apis/) — generic overconstraint and monomorphization tradeoffs (MEDIUM confidence)
+- [Generic associated types to be stable in Rust 1.65 — Rust Blog](https://blog.rust-lang.org/2022/10/28/gats-stabilization/) — GAT stabilization, required bounds pitfalls (HIGH confidence)
+- [Rusty Garbage: My HashMap is non-deterministic — Medium](https://medium.com/@draft1967/rusty-garbage-my-hashmap-is-non-deterministic-0e518be0c5c6) — HashMap non-determinism in game state (MEDIUM confidence)
+- [Reducing generics bloat — Rust Internals](https://internals.rust-lang.org/t/reducing-generics-bloat/6337) — monomorphization and binary bloat from generic proliferation (MEDIUM confidence)
+- [Item 12: Understand the trade-offs between generics and trait objects — Effective Rust](https://www.lurklurk.org/effective-rust/generics.html) — static vs dynamic dispatch ergonomics (HIGH confidence)
+- [Transactional Operations in Rust](https://fy.blackhats.net.au/blog/2021-11-14-transactional-operations-in-rust/) — ACI properties, partial-update atomicity pitfalls (MEDIUM confidence)
+- [undo crate — docs.rs](https://docs.rs/undo) — existing Rust undo/redo patterns (HIGH confidence)
 
 ---
-*Pitfalls research for: herdingcats — Rust library module refactoring and proptest property-based testing*
-*Researched: 2026-03-08*
+*Pitfalls research for: Rust deterministic turn-based game engine library (HerdingCats v0.5.0)*
+*Researched: 2026-03-13*

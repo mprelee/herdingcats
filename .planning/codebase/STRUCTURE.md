@@ -1,145 +1,216 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-03-08
+**Analysis Date:** 2026-03-13
 
 ## Directory Layout
 
 ```
 herdingcats/
 ├── src/
-│   └── lib.rs              # Entire library: Engine, traits, Transaction, RuleLifetime
+│   └── lib.rs                  # Library root (empty skeleton)
 ├── examples/
-│   └── tictactoe.rs        # Reference implementation / runnable example
-├── docs/
-│   ├── ARCHITECTURAL_INVARIANTS.md   # Hard constraints the engine must never violate
-│   └── EXTENSION_GUIDELINES.md       # How to safely add new mechanics
-├── .planning/
-│   └── codebase/           # GSD mapping documents (this directory)
-├── target/                 # Cargo build output (generated, not committed)
-├── AI.md                   # AI modification policy (read before any changes)
-├── Cargo.toml              # Package manifest, no external dependencies
-├── Cargo.lock              # Lockfile
-├── README.md               # Project overview and core model description
-├── CONTRIBUTING.md         # Contribution guidelines
-├── LICENSE-MIT             # MIT license
-└── LICENSE-APACHE          # Apache 2.0 license
+│   ├── tictactoe.rs            # Tic-tac-toe example (empty skeleton)
+│   └── backgammon.rs           # Backgammon example (empty skeleton)
+├── Cargo.toml                  # Package manifest and dependencies
+├── Cargo.lock                  # Locked dependency versions
+├── rustfmt.toml                # Rust formatting configuration
+├── ARCHITECTURE.md             # Design specification document
+├── CHANGELOG.md                # Version history
+├── CONTRIBUTING.md             # Contribution guidelines
+├── LICENSE-MIT                 # MIT license
+├── LICENSE-APACHE              # Apache 2.0 license
+├── release-plz.yml             # Release automation config
+└── .planning/
+    └── codebase/               # Codebase analysis documents (this directory)
 ```
 
 ## Directory Purposes
 
-**`src/`:**
-- Purpose: The entire library source
-- Contains: One file (`lib.rs`) with all public types and traits
-- Key files: `src/lib.rs`
+**src/:**
+- Purpose: Core library implementation
+- Contains: Rust source files (.rs)
+- Status: Skeleton - only `lib.rs` exists but is empty
+- Future structure: Will contain modules for engine, behavior traits, diff/trace abstractions
 
-**`examples/`:**
-- Purpose: Runnable reference implementations demonstrating library usage
-- Contains: Standalone `.rs` files that are Cargo examples (each has its own `main()`)
-- Key files: `examples/tictactoe.rs`
+**examples/:**
+- Purpose: Demonstrative implementations showing library usage
+- Contains: Complete game implementations using the library
+- Status: Skeleton - files exist but are empty
+- Expected content:
+  - `tictactoe.rs`: Simple 2-player tic-tac-toe with minimal rule complexity
+  - `backgammon.rs`: Complex 2-player backgammon with rich rule interactions
 
-**`docs/`:**
-- Purpose: Architectural governance documents — mandatory reading before modifying the engine
-- Contains: `ARCHITECTURAL_INVARIANTS.md`, `EXTENSION_GUIDELINES.md`
-- Key files: `docs/ARCHITECTURAL_INVARIANTS.md`, `docs/EXTENSION_GUIDELINES.md`
-
-**`target/`:**
-- Purpose: Cargo build artifacts
-- Generated: Yes
-- Committed: No (in `.gitignore`)
-
-**`.planning/codebase/`:**
-- Purpose: GSD codebase map documents
-- Generated: Yes (by GSD mapping commands)
-- Committed: Yes
+**.planning/codebase/:**
+- Purpose: Architecture and structure analysis documents
+- Contains: Markdown documents (ARCHITECTURE.md, STRUCTURE.md, etc.)
+- Consumed by: GSD planning and execution commands
+- Not committed: These are analysis tools, separate from source code
 
 ## Key File Locations
 
 **Entry Points:**
-- `src/lib.rs`: Library root — all public API defined here
-- `examples/tictactoe.rs`: Runnable example binary with `fn main()`
+
+- `src/lib.rs`: Main library entry point
+  - Currently empty
+  - Will re-export public traits, types, and engine API
+  - User-facing API surface (Behavior trait, Input/Output types, engine constructor)
 
 **Configuration:**
-- `Cargo.toml`: Package name (`herdingcats`), version (`0.2.0`), edition (`2024`), no `[dependencies]`
-- `Cargo.lock`: Lockfile
+
+- `Cargo.toml`: Package metadata, dependencies, edition (2024), license
+  - Minimal dependencies: only `proptest` in dev-dependencies
+  - Designed for no external runtime dependencies
+  - Targets game development and deterministic systems
+
+- `rustfmt.toml`: Code formatting rules
+  - Enforces consistent Rust style across the project
+
+- `release-plz.yml`: Automated versioning and release configuration
+  - Supports semantic versioning workflow
 
 **Core Logic:**
-- `src/lib.rs` lines 1–19: FNV-1a 64-bit hash implementation (`fnv1a_hash`)
-- `src/lib.rs` lines 27–31: `Operation<S>` trait definition
-- `src/lib.rs` lines 39–56: `Transaction<O>` struct
-- `src/lib.rs` lines 64–69: `RuleLifetime` enum
-- `src/lib.rs` lines 77–99: `Rule<S, O, E, P>` trait definition
-- `src/lib.rs` lines 107–115: `CommitFrame<S, O>` internal struct
-- `src/lib.rs` lines 123–327: `Engine<S, O, E, P>` struct and all methods
 
-**Governance:**
-- `docs/ARCHITECTURAL_INVARIANTS.md`: Nine invariants that must never be weakened
-- `docs/EXTENSION_GUIDELINES.md`: Eight extension patterns for safely growing the engine
-- `AI.md`: Hard requirements and extension policy for AI-assisted modifications
+- To be implemented in `src/` (specific module structure TBD):
+  - Behavior trait definition
+  - Engine orchestration (dispatch, undo, redo)
+  - Working state management (copy-on-write semantics)
+  - History and frame management
+  - Outcome type definitions
+
+**Testing:**
+
+- Pattern: Inline `#[cfg(test)]` modules within implementation files (not separate test files)
+- Framework: proptest for property-based testing (in dev-dependencies)
+- Assertion library: Rust standard assertions
+- Locations: To be defined as modules are created
+
+**Examples:**
+
+- `examples/tictactoe.rs`: User-defined types (State, Input, Diff, Trace, Behaviors)
+  - Demonstrates minimal rule complexity
+  - Shows how to compose behaviors
+  - Shows state structure pattern
+
+- `examples/backgammon.rs`: User-defined types with complex rules
+  - Demonstrates interaction between multiple behaviors
+  - Shows ordering importance in rule resolution
+  - Shows CoW benefits in complex state management
 
 ## Naming Conventions
 
 **Files:**
-- Library source: `snake_case.rs` (e.g., `lib.rs`)
-- Examples: `snake_case.rs` named after the game/scenario (e.g., `tictactoe.rs`)
-- Docs: `SCREAMING_SNAKE_CASE.md` for governance documents
 
-**Structs and Enums:**
-- `PascalCase` for all types: `Engine`, `Transaction`, `CommitFrame`, `RuleLifetime`, `GameEvent`, `PlayRule`, `WinRule`
+- Module files: `lowercase_with_underscores.rs` (Rust convention)
+- Example files: `gamename.rs` (descriptive game name)
+- Config files: UPPERCASE or `.config.name` format
 
-**Traits:**
-- `PascalCase`: `Operation`, `Rule`
+**Directories:**
 
-**Functions and Methods:**
-- `snake_case`: `dispatch`, `dispatch_preview`, `add_rule`, `replay_hash`, `fnv1a_hash`
+- Source modules: `src/`
+- Compiled output: `target/` (Cargo default, not committed)
+- Examples: `examples/`
+- Documentation: Root level or `.planning/`
 
-**Type Parameters:**
-- Single uppercase letters following the convention: `S` (state), `O` (operation), `E` (event), `P` (priority)
+**Rust Code Elements:**
 
-**Constants:**
-- `SCREAMING_SNAKE_CASE`: `FNV_OFFSET`, `FNV_PRIME`
-
-**Enum variants:**
-- `PascalCase`: `Permanent`, `Turns`, `Triggers`, `Default`, `Place`, `SetWinner`, `SwitchTurn`
+- Traits: PascalCase (e.g., `Behavior`)
+- Enums: PascalCase (e.g., `Outcome`, `BehaviorResult`)
+- Structs: PascalCase (e.g., `Frame`)
+- Functions: snake_case (e.g., `dispatch`, `apply_diff`)
+- Constants: UPPERCASE_SNAKE_CASE (e.g., `MAX_BEHAVIORS`)
+- Type parameters: Single uppercase letters or PascalCase (e.g., `S`, `I`, `D`, `State`)
+- Module names: lowercase_snake_case or descriptive nouns
 
 ## Where to Add New Code
 
-**New Game (example):**
-- Create: `examples/<game_name>.rs`
-- Structure: Define state struct, `Op` enum implementing `Operation<State>`, event enum, `Rule` impls, `fn main()`
-- Run with: `cargo run --example <game_name>`
+**New Engine Feature:**
+- Implementation: `src/engine.rs` (or appropriate module)
+- Tests: `#[cfg(test)]` module within the feature file or `src/tests/` if tests grow large
+- Public API exposure: Re-export from `src/lib.rs`
 
-**New Operation Type (within a game):**
-- Add variant to the game's `Op` enum in its `examples/<game>.rs`
-- Implement `apply()`, `undo()`, `hash_bytes()` for the new variant
-- Must be deterministic and fully reversible
+**New Behavior Trait or Extension:**
+- Implementation: `src/behavior.rs` (or appropriate module)
+- Examples: Demonstrate in `examples/tictactoe.rs` or `examples/backgammon.rs`
 
-**New Rule (within a game):**
-- Define a struct (zero-size or data-carrying) in `examples/<game>.rs`
-- Implement `Rule<S, O, E, P>` for it — override only `before` and/or `after` as needed
-- Register via `engine.add_rule(MyRule, RuleLifetime::Permanent)` in `main()`
+**New Example Implementation:**
+- Main file: `examples/gamename.rs`
+- Supporting module (if needed): `examples/gamename/` directory
+- Must define: `State`, `Input`, `Diff`, `Trace`, behavior implementations
+- Must demonstrate: Usage of dispatch, undo/redo, behavior composition
 
-**New Engine Feature (modifying the library):**
-- Edit `src/lib.rs` only
-- Must not violate any invariant in `docs/ARCHITECTURAL_INVARIANTS.md`
-- Must follow patterns in `docs/EXTENSION_GUIDELINES.md`
-- Feature-specific logic must not be embedded in the engine core
+**Test Fixtures or Shared Test Utilities:**
+- Location: `src/tests/fixtures.rs` or within `#[cfg(test)]` modules
+- Pattern: Factory functions or builder patterns for constructing test states/inputs
 
-**New Transaction Flags:**
-- Add fields to `Transaction<O>` in `src/lib.rs`
-- Update `dispatch()` and `dispatch_preview()` to respect the flag deterministically
+**Documentation:**
+- API documentation: Doc comments in source code (triple-slash `///`)
+- Architecture guides: `.planning/codebase/*.md` files
+- Examples/tutorials: In `examples/` with inline comments
 
 ## Special Directories
 
-**`docs/`:**
-- Purpose: Architectural governance (not API docs — those are on docs.rs)
-- Generated: No
-- Committed: Yes — treat as source of truth for engine constraints
+**target/:**
+- Purpose: Cargo build output (compiled binaries, artifacts)
+- Generated: Yes (by `cargo build`)
+- Committed: No (.gitignore)
 
-**`target/`:**
-- Purpose: Compiled artifacts, test binaries, example binaries
-- Generated: Yes (by `cargo build` / `cargo run`)
-- Committed: No
+**.git/:**
+- Purpose: Git version control metadata
+- Generated: Yes (by `git init` and operations)
+- Committed: No (directory itself)
+
+**.github/:**
+- Purpose: GitHub-specific configuration (CI/CD workflows)
+- Generated: No (manually maintained)
+- Committed: Yes
+
+**.planning/:**
+- Purpose: GSD system files and analysis documents
+- Generated: Partially (analysis documents created by mapping commands)
+- Committed: Yes (for team visibility)
+
+**Ignored by .gitignore:**
+- `target/`: Build artifacts
+- `*.swp`, `*.swo`: Editor temp files
+- `.DS_Store`: macOS metadata
+- Anything not explicitly tracked
+
+## Current Status and Next Steps
+
+**Current State:**
+- Skeleton structure in place: `src/lib.rs` is empty
+- Examples exist but are empty: `tictactoe.rs`, `backgammon.rs`
+- No implementation yet
+
+**Implementation Order (Recommended):**
+1. Define core types in `src/lib.rs`:
+   - `Behavior` trait with generic type parameters
+   - `BehaviorResult<D, O>` enum
+   - `Outcome<F, N>` enum
+   - `Frame<I, D, T>` struct
+
+2. Implement engine core in `src/engine.rs`:
+   - `Engine<S, I, D, T, O, B>` struct
+   - `dispatch()` method
+   - `undo()` and `redo()` methods
+   - Copy-on-write working state construction
+
+3. Create first example (`examples/tictactoe.rs`):
+   - Define simple `GameState`, `Move`, `MoveDiff`, `GameTrace`
+   - Implement 2-3 simple behaviors
+   - Test dispatch, undo, redo
+
+4. Create second example (`examples/backgammon.rs`):
+   - Define complex `GameState` with substates
+   - Implement multiple behaviors with ordering importance
+   - Demonstrate CoW benefits
+
+**Testing Strategy:**
+- Property tests: Using proptest in `#[cfg(test)]` modules
+- Unit tests: Inline within implementation modules
+- Roundtrip tests: Verify dispatch + undo/redo returns to original state
+- Ordering tests: Verify behavior execution order matters and is deterministic
 
 ---
 
-*Structure analysis: 2026-03-08*
+*Structure analysis: 2026-03-13*

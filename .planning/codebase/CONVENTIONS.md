@@ -1,166 +1,157 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-03-08
+**Analysis Date:** 2026-03-13
 
 ## Naming Patterns
 
 **Files:**
-- `snake_case` for all Rust source files: `lib.rs`, `tictactoe.rs`
-- Single-file library: `src/lib.rs` is the sole library entry point
+- Rust module files use snake_case: `engine.rs`, `behavior.rs`, `mutation.rs`, `action.rs`, `hash.rs`
+- Each trait or major struct concept gets its own module file
+- No `mod.rs` pattern observed; inline module organization in `lib.rs`
 
-**Structs and Enums:**
-- `PascalCase` for all types: `Transaction`, `CommitFrame`, `RuleLifetime`, `Engine`
-- `PascalCase` for enum variants: `RuleLifetime::Permanent`, `RuleLifetime::Turns(u32)`, `Op::SwitchTurn`
-- Named fields in enum variants for clarity: `Op::Place { idx: usize, player: Player }`
-
-**Traits:**
-- `PascalCase` with descriptive role names: `Operation`, `Rule`
-
-**Functions and Methods:**
-- `snake_case` for all functions and methods: `apply`, `undo`, `hash_bytes`, `dispatch_preview`, `add_rule`, `replay_hash`
-- Short, verb-oriented names: `apply`, `undo`, `read`, `write`, `dispatch`
+**Functions:**
+- Function names use snake_case: `dispatch`, `dispatch_with`, `dispatch_preview`, `add_behavior`, `replay_hash`
+- Internal helper functions prefixed with descriptive names: `op_sequence_strategy`, `mixed_op_strategy`
+- Accessor methods follow convention: `read()`, `new()`, `id()`, `priority()`
 
 **Variables:**
-- `snake_case`: `state_snapshot`, `lifetime_snapshot`, `hash_before`, `enabled_snapshot`
-- Single-letter variables used minimally and only in local scope: `a`, `b`, `c` for board indices within a `for` loop
+- Local variables and parameters use snake_case: `state`, `behavior`, `event`, `tx`, `engine`
+- Abbreviations used for conciseness in specific contexts: `tx` for transaction/action, `op` for operation
+- Mutable bindings explicitly declared with `mut`: `let mut engine`, `let mut tx`
 
-**Constants:**
-- `SCREAMING_SNAKE_CASE`: `FNV_OFFSET`, `FNV_PRIME`
-- Type annotated explicitly: `const FNV_OFFSET: u64 = ...`
-
-**Generic Type Parameters:**
-- Single uppercase letters: `S` (state), `O` (operation), `E` (event), `P` (priority)
-- Consistent across the entire `Engine<S, O, E, P>` and `Rule<S, O, E, P>` boundary
+**Types:**
+- PascalCase for struct/enum/trait names: `Engine`, `Behavior`, `Mutation`, `Action`, `CommitFrame`
+- Generic type parameters use single uppercase letters or descriptive short names: `S` (state), `M` (mutation), `I` (input), `P` (priority)
+- Trait implementations follow `impl Trait<S, M, I, P> for Type` pattern
 
 ## Code Style
 
 **Formatting:**
-- `rustfmt` 1.8.0-stable (default settings; no `rustfmt.toml` present)
-- Trailing commas in struct and enum definitions
-- Long function signatures broken across multiple lines with each parameter on its own line:
-  ```rust
-  pub fn add_rule<R>(
-      &mut self,
-      rule: R,
-      lifetime: RuleLifetime,
-  ) where
-      R: Rule<S, O, E, P> + 'static,
-  { ... }
-  ```
+- No explicit formatter detected in Cargo.toml configuration
+- Code uses standard Rust formatting conventions
+- 4-space indentation
+- Comments use `//` for single-line and `/* */` for multi-line documentation
+- File: `rustfmt.toml` contains `edition = "2024"` indicating rustfmt configuration
 
 **Linting:**
-- No `clippy.toml` present; standard Clippy rules apply
-- No `#![deny(...)]` or `#![allow(...)]` attributes observed in `src/lib.rs`
-
-## Section Delimiters
-
-Sections within files are separated by prominent ASCII banner comments to aid navigation:
-
-```rust
-//
-// ============================================================
-// Engine
-// ============================================================
-//
-```
-
-Within `impl` blocks, subsections use a shorter form:
-
-```rust
-//
-// --------------------------------------------------------
-// Commit Dispatch
-// --------------------------------------------------------
-//
-```
-
-This is a strict convention used consistently throughout `src/lib.rs` and `examples/tictactoe.rs`. New sections must follow this pattern.
+- `#![warn(missing_docs)]` crate-level lint at top of `src/lib.rs` enforces documentation
+- All public items must have documentation comments or build will warn
+- No explicit clippy configuration detected in checked files
 
 ## Import Organization
 
 **Order:**
 1. Standard library imports (`use std::...`)
-2. External crate imports (`use herdingcats::*`)
-3. No internal module imports (single-file library)
+2. Internal crate imports (`use crate::...`)
+3. External crate imports (via `use external_crate::...`)
 
-**Style:**
-- Use glob imports from the library in consumer code: `use herdingcats::*;`
-- Grouped standard library imports kept together: `use std::collections::{HashMap, HashSet};`
-- No path aliases used
+**Example from `src/engine.rs`:**
+```rust
+use crate::action::Action;
+use crate::behavior::Behavior;
+use crate::hash::{FNV_OFFSET, FNV_PRIME, fnv1a_hash};
+use crate::mutation::Mutation;
+```
 
-## Visibility
-
-- `pub` on all types and methods intended for library consumers: `Engine`, `Transaction`, `Rule`, `Operation`, `RuleLifetime`, `dispatch`, `add_rule`, `undo`, `redo`, `read`, `write`
-- Internal types default to private (no `pub`): `CommitFrame`, `fnv1a_hash`
-- Public struct fields used when the field is a primary interface: `Engine::state`, `Transaction::ops`, `Transaction::irreversible`, `Transaction::deterministic`, `Transaction::cancelled`
+**Path Aliases:**
+- No path aliases or alternative module paths observed in codebase
+- Direct module paths used: `crate::behavior`, `crate::mutation`, `crate::action`
 
 ## Error Handling
 
-**Pattern:**
-- No `Result` or `?` operator used in the library core — operations are infallible by design
-- Invalid states are handled by mutating `tx.cancelled = true` inside rules rather than returning errors:
-  ```rust
-  if state.winner.is_some() {
-      tx.cancelled = true;
-      return;
-  }
-  ```
-- `unreachable!()` used for exhaustive match arms that logically cannot occur:
-  ```rust
-  Cell::_ => unreachable!(),
-  ```
-- No `panic!`, `unwrap()`, or `expect()` calls in library code
+**Patterns:**
+- No dedicated error type or custom Result wrapper observed in current codebase
+- Outcome types are domain-specific: `Option<Action<M>>` returned from dispatch operations
+- `is_none()` / `is_some()` checks used to inspect results
+- No panic-heavy approach; methods return `None` for non-committed states
+- Example from dispatch: cancelled actions and empty mutations both return `None`
 
-## Trait Design
+## Logging
 
-**Required vs Default Methods:**
-- Trait methods that must always be defined: `id()`, `priority()`, `apply()`, `undo()`, `hash_bytes()`
-- Trait methods with no-op defaults (override only when needed): `before()`, `after()` on `Rule`
-- Default implementations use underscore-prefixed parameters to silence unused warnings:
-  ```rust
-  fn before(
-      &self,
-      _state: &S,
-      _event: &mut E,
-      _tx: &mut Transaction<O>,
-  ) {}
-  ```
+**Framework:** None detected
 
-## Generics and Bounds
-
-- `where` clauses on separate lines from `impl` or `fn` signatures for readability
-- Bounds stated explicitly and minimally: `S: Clone`, `O: Operation<S>`, `P: Copy + Ord`
-- `PhantomData` used when a type parameter is logically tied to a struct but not stored directly: `CommitFrame::_marker: std::marker::PhantomData<S>`
-
-## Derive Macros
-
-- `#[derive(Clone)]` applied to all types that must be snapshot-able or stored on stacks
-- `#[derive(Clone, Copy, Debug)]` for lightweight value types like `RuleLifetime`
-- `#[derive(Clone, Copy, Debug, PartialEq)]` for domain enums (`Player`, `Cell`)
-- Derive macros are the only attributes used; no proc macros or custom derives
-
-## Constructors
-
-- `fn new() -> Self` is the canonical constructor pattern for both library types (`Transaction`, `Engine`) and consumer types (`Game`)
-- No builder pattern used; structs initialized with field literals inside `new()`
+**Patterns:**
+- No structured logging framework present
+- Codebase is infrastructure/library focused; logging responsibility deferred to library user
+- Documentation emphasizes behavior transparency through `Action` return types and replay history
+- Tests use simple `println!` equivalents implicit in assertions
 
 ## Comments
 
 **When to Comment:**
-- Section banners for every logical group of code (mandatory, see Section Delimiters above)
-- No inline comments on individual statements — code is expected to be self-explanatory
-- No JSDoc-style doc comments (`///`) observed in the library code; documentation expected via `README.md` and `docs/`
+- /// style documentation comments for all public items (enforced by `#![warn(missing_docs)]`)
+- Comments above key sections within implementations to organize code blocks
+- Section markers used: `// ============================================================` style dividers
+- Test fixtures documented inline within test modules
 
-## Architectural Constraints (Enforced by Convention)
+**JSDoc/TSDoc:**
+- Rust uses `///` for doc comments (not JSDoc)
+- Documentation style observed in `src/behavior.rs`, `src/mutation.rs`:
+  - Triple-slash comments immediately precede the item they document
+  - Markdown formatting supported in doc comments
+  - `# Examples` section with runnable code blocks in many functions
+  - Generic explanation followed by concrete `# Examples` section
 
-These are enforced through documentation (`docs/ARCHITECTURAL_INVARIANTS.md`, `AI.md`) and code review, not compiler enforcement:
+**Example from `src/mutation.rs`:**
+```rust
+/// Return a deterministic byte sequence that uniquely identifies this
+/// mutation variant and its data.
+///
+/// The engine concatenates the `hash_bytes()` of all mutations...
+///
+/// # Examples
+///
+/// ```
+/// use herdingcats::Mutation;
+/// // ... code example ...
+/// ```
+fn hash_bytes(&self) -> Vec<u8>;
+```
 
-- All state mutation must occur through `Operation::apply()` — never by direct field assignment outside an `Operation`
-- Priority type `P` must be a closed enum (never a raw integer)
-- Events must be closed enums with static dispatch — no `dyn Any` or runtime type inspection
-- Rule durations must use `RuleLifetime`, not fields on rule structs
-- RNG state (if added) must live inside `S` and mutate through `Operation`
+## Function Design
+
+**Size:**
+- Functions kept relatively small and focused
+- Complex dispatch logic broken into phases: `before()` hooks, mutation application, `after()` hooks
+- Helper functions created for repeated logic (e.g., `op_sequence_strategy` in tests)
+
+**Parameters:**
+- Trait methods accept borrowed references when inspecting: `&self`, `&state`, `&event`
+- Mutable references when mutation needed: `&mut state`, `&mut tx`, `&mut event`
+- Owned values used only for types implementing `Clone` and when transfer of ownership is intentional
+- Generic parameters constrained with bounds: `S: Clone`, `M: Mutation<S>`
+
+**Return Values:**
+- `Option<T>` for nullable results: `Option<Action<M>>`
+- Unit type `()` for operations with no meaningful return
+- Owned types returned when ownership transfer needed: `Engine<S, M, I, P>` returned from constructors
+- Functions that inspect state return clones: `read()` returns `S`
+
+## Module Design
+
+**Exports:**
+- Public items exported via `pub use` statements at `src/lib.rs` module level
+- Current exports (from previous commit): `Action`, `Behavior`, `Engine`, `Mutation`
+- Internal modules not re-exported: `action`, `behavior`, `engine`, `hash`, `mutation` are private mod declarations
+- Users access traits/structs through `herdingcats::` namespace
+
+**Barrel Files:**
+- `src/lib.rs` serves as barrel file aggregating all public exports
+- Each concept (Engine, Behavior, Mutation, Action) lives in separate module file
+- Clear separation between public API (`lib.rs` exports) and implementation details (private module internals)
+
+## Generic Patterns Observed
+
+**Trait Parameterization:**
+- Heavy use of generics to maintain type safety: `Engine<S, M, I, P>`, `Behavior<S, M, I, P>`, `Mutation<S>`
+- Bounds carefully chosen to enable implementation without forcing unnecessary constraints
+- `PhantomData<S>` markers used for variance control when struct doesn't own the type parameter
+
+**Copy vs Clone:**
+- Traits use `Clone` for stateful types: `S: Clone` required for state snapshots
+- Simple types use `Copy` when possible: `P: Copy + Ord` for priority values
+- Mutation types required to be `Clone` to support undo stack storage
 
 ---
 
-*Convention analysis: 2026-03-08*
+*Convention analysis: 2026-03-13*

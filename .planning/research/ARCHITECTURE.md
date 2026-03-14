@@ -1,376 +1,552 @@
 # Architecture Research
 
-**Domain:** Rust library crate — module refactor + game example
-**Researched:** 2026-03-08
-**Confidence:** HIGH
+**Domain:** Rust deterministic turn-based game engine library
+**Researched:** 2026-03-13
+**Confidence:** HIGH — derived directly from the authoritative ARCHITECTURE.md spec; Rust type system patterns verified against standard library and community consensus.
+
+---
 
 ## Standard Architecture
 
 ### System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        src/lib.rs (facade)                       │
-│   pub mod hash; pub mod operation; pub mod transaction;          │
-│   pub mod rule; pub mod engine;                                  │
-│   pub use engine::Engine;  pub use rule::{Rule, RuleLifetime};  │
-│   pub use operation::Operation;  pub use transaction::Transaction│
-└──────────────────────────────┬──────────────────────────────────┘
-                               │ re-exports (pub use)
-     ┌─────────────────────────┼──────────────────────────┐
-     │             │           │           │              │
-┌────▼───┐  ┌──────▼──┐  ┌────▼────┐  ┌──▼────┐  ┌──────▼────┐
-│hash.rs │  │operation│  │transact │  │rule.rs│  │engine.rs  │
-│        │  │.rs      │  │ion.rs   │  │       │  │           │
-│fnv1a   │  │Operation│  │Transact-│  │Rule   │  │Engine<S,O │
-│hash fn │  │<S> trait│  │ion<O>   │  │<S,O,E,│  │,E,P>      │
-│FNV     │  │         │  │struct   │  │P>trait│  │CommitFrame│
-│consts  │  │         │  │         │  │RuleLi-│  │undo/redo  │
-│        │  │         │  │         │  │fetime │  │dispatch   │
-└────────┘  └─────────┘  └─────────┘  └───────┘  └───────────┘
-     ▲                                                  │
-     └──────────────────────────────────────────────────┘
-          engine.rs uses hash internally (private dep)
+┌────────────────────────────────────────────────────────────┐
+│                     Public API Layer                        │
+│   dispatch(input) → Result<Outcome, EngineError>           │
+│   undo()          → Result<Outcome, EngineError>           │
+│   redo()          → Result<Outcome, EngineError>           │
+├────────────────────────────────────────────────────────────┤
+│                    Engine Core Layer                        │
+│  ┌──────────────┐  ┌───────────────┐  ┌────────────────┐  │
+│  │ Behavior     │  │ WorkingState  │  │ History        │  │
+│  │ Ordering &   │  │ (CoW wrapper) │  │ (undo/redo     │  │
+│  │ Evaluation   │  │               │  │  stacks)       │  │
+│  └──────┬───────┘  └──────┬────────┘  └───────┬────────┘  │
+│         │                 │                    │           │
+├─────────┴─────────────────┴────────────────────┴──────────┤
+│                   User-Supplied Types                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
+│  │ State    │  │ Diff     │  │ Trace    │  │ Outcome  │  │
+│  │ (domain) │  │ (enum)   │  │ (enum)   │  │ payload  │  │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
+└────────────────────────────────────────────────────────────┘
 ```
 
-```
-examples/
-├── tictactoe.rs    (existing, deterministic, must not break)
-└── backgammon.rs   (new, non-deterministic dice, partial-move undo)
-         │
-         ├── uses herdingcats::* (Engine, Operation, Rule, etc.)
-         ├── defines local: Board, Op, Event, Priority
-         └── exercises: dice rolls, hit/reenter, bearing off, undo
-```
+The engine library is a thin orchestrator: it owns only dispatch logic, behavior ordering, CoW working state coordination, and history stacks. All domain types (State, Diff, Trace, Outcome payloads) are supplied by the library user through generic type parameters.
 
 ### Component Responsibilities
 
-| Component | Responsibility | File |
-|-----------|----------------|------|
-| `hash.rs` | FNV-1a 64-bit constants and hash function | `src/hash.rs` |
-| `operation.rs` | `Operation<S>` trait definition | `src/operation.rs` |
-| `transaction.rs` | `Transaction<O>` struct and `impl Default` | `src/transaction.rs` |
-| `rule.rs` | `Rule<S,O,E,P>` trait, `RuleLifetime` enum | `src/rule.rs` |
-| `engine.rs` | `Engine<S,O,E,P>` struct, `CommitFrame`, all dispatch logic | `src/engine.rs` |
-| `lib.rs` | Module declarations (`mod X;`) + `pub use` re-exports only | `src/lib.rs` |
+| Component | Responsibility | Notes |
+|-----------|----------------|-------|
+| `Engine<S, I, D, T, O, K, B>` | Owns committed state + history stacks, exposes `dispatch`/`undo`/`redo` | Top-level struct the user constructs |
+| `WorkingState<S>` | Wraps committed state reference + optional owned working clone; implements CoW access | Internal to engine; never exposed directly |
+| `Behavior` trait | Defines `name()`, `order_key()`, `evaluate()` contract | User implements; engine calls |
+| `BehaviorResult<D, O>` | `Continue(Vec<D>)` or `Stop(O)` — behavior's decision per input | Engine-defined; user returns |
+| `Frame<I, D, T>` | Canonical committed transition: `{ input, diff, trace }` | Stored in history; returned in `Committed`/`Undone`/`Redone` |
+| `Outcome<F, N>` | `Committed(F)` / `Undone(F)` / `Redone(F)` / `NoChange` / `InvalidInput(N)` / `Disallowed(N)` / `Aborted(N)` | Engine-defined enum; F = Frame, N = user payload |
+| `EngineError` | Engine implementation failures distinct from domain outcomes | Engine-defined enum |
+| History | Two `Vec<Frame>` stacks (undo stack + redo stack), encapsulated inside Engine | Never public fields |
 
-## Recommended Project Structure
+---
+
+## Recommended Module Structure
 
 ```
 src/
-├── lib.rs              # thin facade: mod declarations + pub use re-exports
-├── hash.rs             # fnv1a_hash(), FNV_OFFSET, FNV_PRIME (pub(crate))
-├── operation.rs        # pub trait Operation<S>
-├── transaction.rs      # pub struct Transaction<O>
-├── rule.rs             # pub trait Rule<S,O,E,P>, pub enum RuleLifetime
-└── engine.rs           # pub struct Engine<S,O,E,P>, CommitFrame (private)
-
-examples/
-├── tictactoe.rs        # unchanged
-└── backgammon.rs       # new
-
-tests/                  # optional integration test dir (proptest lives here or inline)
+├── lib.rs                  # Public re-exports only; no implementation
+├── behavior.rs             # Behavior trait + BehaviorResult enum
+├── outcome.rs              # Outcome enum + EngineError enum
+├── frame.rs                # Frame struct
+├── working_state.rs        # WorkingState<S> CoW wrapper
+├── history.rs              # History struct (undo/redo stacks)
+└── engine.rs               # Engine<...> struct — dispatch, undo, redo
 ```
 
 ### Structure Rationale
 
-- **hash.rs:** The FNV implementation is an internal concern. Exports `pub(crate)` only — `fnv1a_hash` and the two constants are never part of the public API. Engine uses them directly; no consumer needs them.
-- **operation.rs:** The `Operation<S>` trait has no dependencies on other internal modules. Cleanest leaf node — put it first in the dependency chain.
-- **transaction.rs:** Depends only on `Operation<S>` being imported as a type parameter bound. No direct imports required beyond standard library.
-- **rule.rs:** Depends on `operation.rs` (imports `Operation`) and `transaction.rs` (imports `Transaction`). Also defines `RuleLifetime` here because it only exists to be passed to the engine alongside a rule.
-- **engine.rs:** The integration point. Imports `hash`, `operation`, `transaction`, `rule`. This is the only module that is "fat." `CommitFrame` stays private in engine.rs — it is an implementation detail, not a public type.
-- **lib.rs as facade:** Declares all modules with `mod hash; mod operation; mod transaction; mod rule; mod engine;` and re-exports every currently-public item. The public API surface must be identical post-split so `tictactoe.rs`'s `use herdingcats::*;` continues to work without change.
+- **`lib.rs` re-exports only:** Keeps the public surface clean and decoupled from internal layout. Users import `herdingcats::{Behavior, BehaviorResult, Engine, Frame, Outcome, EngineError}`.
+- **`behavior.rs` first:** It has no internal dependencies. It is the base of the dependency graph.
+- **`outcome.rs` second:** `Outcome` and `EngineError` depend only on `Frame`, or can be defined before `Frame` with a type parameter.
+- **`frame.rs`:** Depends on nothing engine-internal; purely a data carrier.
+- **`working_state.rs`:** Depends only on user-supplied `S`. Can be implemented immediately after understanding the CoW contract.
+- **`history.rs`:** Depends on `Frame`. Can be a simple wrapper around two `Vec<Frame>`.
+- **`engine.rs`:** Depends on all of the above. Implemented last. This is where dispatch, undo, redo live.
+
+No subfolders needed at MVP scale. A flat module structure keeps navigation simple and avoids artificial grouping.
+
+---
+
+## Type Dependency Graph
+
+The build order follows this dependency chain. Each item can only be implemented after the items it depends on exist.
+
+```
+(nothing)
+    │
+    ▼
+BehaviorResult<D, O>          — depends on: nothing engine-internal
+    │
+    ▼
+Behavior<S, I, D, O, K> trait — depends on: BehaviorResult
+    │
+    ▼
+Frame<I, D, T>                — depends on: nothing engine-internal
+    │
+    ▼
+Outcome<F, N>                 — depends on: Frame (used as F)
+EngineError                   — depends on: nothing
+    │
+    ▼
+WorkingState<S>               — depends on: nothing engine-internal (wraps user S)
+    │
+    ▼
+History<I, D, T>              — depends on: Frame
+    │
+    ▼
+Engine<S, I, D, T, O, K, B>  — depends on: all of the above
+```
+
+This graph has no cycles. Each layer is independently testable.
+
+---
+
+## Suggested Build Order for Incremental Implementation
+
+Implement in this sequence. Each step is compilable and partially testable before moving on.
+
+### Step 1: `BehaviorResult<D, O>`
+
+```rust
+pub enum BehaviorResult<D, O> {
+    Continue(Vec<D>),
+    Stop(O),
+}
+```
+
+No dependencies. Zero complexity. Defines the contract that every behavior returns.
+
+### Step 2: `Behavior<S, I, D, O, K>` trait
+
+```rust
+pub trait Behavior<S, I, D, O, K> {
+    fn name(&self) -> &'static str;
+    fn order_key(&self) -> K;
+    fn evaluate(&self, input: &I, state: &S) -> BehaviorResult<D, O>;
+}
+```
+
+`S` is read-only (`&S`) in `evaluate`. Behaviors never mutate working state directly. `K: Ord` enables sorting by `(order_key, name)`.
+
+### Step 3: `Frame<I, D, T>`
+
+```rust
+pub struct Frame<I, D, T> {
+    pub input: I,
+    pub diff: Vec<D>,   // or user-defined DiffCollection
+    pub trace: Vec<T>,  // or user-defined Trace
+}
+```
+
+Pure data carrier. No logic. Can be cloned (require `I: Clone, D: Clone, T: Clone`).
+
+### Step 4: `Outcome<F, N>` and `EngineError`
+
+```rust
+pub enum Outcome<F, N> {
+    Committed(F),
+    Undone(F),
+    Redone(F),
+    NoChange,
+    InvalidInput(N),
+    Disallowed(N),
+    Aborted(N),
+}
+
+pub enum EngineError {
+    EmptyBehaviorSet,
+    // Add as genuine engine bugs are discovered
+}
+```
+
+`F` will be `Frame<I, D, T>`. `N` is a user-defined non-committed payload type. `EngineError` starts minimal — do not pre-populate with speculative variants.
+
+### Step 5: `WorkingState<S>` (CoW wrapper)
+
+This is the most mechanically interesting step. See the CoW section below for the full implementation strategy.
+
+### Step 6: `History<I, D, T>`
+
+```rust
+struct History<I, D, T> {
+    undo_stack: Vec<Frame<I, D, T>>,
+    redo_stack: Vec<Frame<I, D, T>>,
+}
+```
+
+Simple wrapper. Methods: `push_committed(frame)`, `pop_undo() -> Option<Frame>`, `pop_redo() -> Option<Frame>`, `clear()` (for irreversibility boundary). Redo stack is cleared on every new commit (standard undo/redo contract).
+
+### Step 7: `Engine<...>` with dispatch, undo, redo
+
+Implement dispatch first, then undo, then redo. Dispatch is the core; undo/redo are mechanical inversions using stored frames.
+
+---
+
+## CoW Working State: Implementation Strategy
+
+### The Problem
+
+The ARCHITECTURE.md spec requires:
+- read from committed state until first write
+- clone a substate only when first written
+- later behaviors see the updated working substate
+- if dispatch fails, discard the working copy with no committed mutation
+
+### Approach: Reference + Optional Owned Clone
+
+The engine holds a reference to the committed state during dispatch. On first write (first diff application), it clones the committed state into an owned working copy. All subsequent reads and writes go to the working copy.
+
+```rust
+// Internal to engine dispatch — not a public struct
+enum WorkingState<'a, S: Clone> {
+    Borrowed(&'a S),
+    Owned(S),
+}
+
+impl<'a, S: Clone> WorkingState<'a, S> {
+    fn new(committed: &'a S) -> Self {
+        WorkingState::Borrowed(committed)
+    }
+
+    fn read(&self) -> &S {
+        match self {
+            WorkingState::Borrowed(s) => s,
+            WorkingState::Owned(s) => s,
+        }
+    }
+
+    fn write(&mut self) -> &mut S {
+        if let WorkingState::Borrowed(s) = self {
+            *self = WorkingState::Owned((*s).clone());
+        }
+        match self {
+            WorkingState::Owned(s) => s,
+            WorkingState::Borrowed(_) => unreachable!(),
+        }
+    }
+
+    fn into_committed(self) -> Option<S> {
+        match self {
+            WorkingState::Owned(s) => Some(s),
+            WorkingState::Borrowed(_) => None, // no writes occurred
+        }
+    }
+}
+```
+
+The dispatch loop calls `working.read()` for all behavior evaluations and `working.write()` only when applying a diff. `into_committed()` returns `None` for no-diff dispatches (maps to `NoChange`) and `Some(new_state)` for successful commits.
+
+### Why Not `std::borrow::Cow`?
+
+`std::borrow::Cow<'a, S>` requires `S: ToOwned` and is designed primarily for string/slice scenarios. For arbitrary user State types, implementing `ToOwned` adds friction without benefit. A hand-rolled enum variant as shown above is clearer, more idiomatic for this use case, and does not require any trait bounds beyond `Clone`. Confidence: HIGH (standard library docs confirm `Cow`'s `ToOwned` requirement; this pattern is well-established in Rust).
+
+### Substate Granularity
+
+The ARCHITECTURE.md spec says substate granularity is user-chosen. The library does not enforce sub-substate CoW. The single `WorkingState<S>` wrapping the entire user State is sufficient for the MVP. If the user wants substate-level lazy cloning, they can implement it inside their own `State` type. The engine's contract is just: "read from committed, write to working copy, commit atomically on success."
+
+### State Bound Requirements
+
+The engine requires `S: Clone` to enable the working-copy clone on first write. No other bounds on `S` are needed by the engine. Behaviors receive `&S` (read-only), so no mutable borrow of state ever escapes the engine.
+
+---
+
+## Dispatch Algorithm: Concrete Implementation Flow
+
+```
+dispatch(input: I) -> Result<Outcome<Frame<I,D,T>, N>, EngineError>
+
+1. Create WorkingState::Borrowed(&self.committed_state)
+2. Sort behaviors by (order_key, name) — sort once at construction, not per dispatch
+3. accumulated_diffs: Vec<D> = vec![]
+4. accumulated_trace: Vec<T> = vec![]
+5. For each behavior in sorted order:
+   a. let result = behavior.evaluate(&input, working.read())
+   b. match result:
+      - Stop(outcome_payload) =>
+          drop(working)            // discard — borrowed or owned
+          return Ok(Outcome::Disallowed(outcome_payload))  // or InvalidInput/Aborted per user convention
+      - Continue(diffs) =>
+          for diff in diffs:
+            diff.apply(working.write())   // triggers clone on first write
+            let trace_entries = diff.trace_entries()
+            accumulated_trace.extend(trace_entries)
+            accumulated_diffs.push(diff)
+6. If accumulated_diffs is empty:
+   return Ok(Outcome::NoChange)
+7. new_state = working.into_committed().unwrap()  // safe: diffs were applied
+8. frame = Frame { input, diff: accumulated_diffs, trace: accumulated_trace }
+9. self.committed_state = new_state
+10. self.history.push_committed(frame.clone())
+11. return Ok(Outcome::Committed(frame))
+```
+
+### Behavior Ordering at Construction Time
+
+Sort behaviors once when `Engine` is constructed, not on every dispatch. Store behaviors in sorted order. This eliminates per-dispatch allocation and sorting overhead while guaranteeing determinism.
+
+```rust
+// Sort during Engine::new()
+behaviors.sort_by(|a, b| {
+    a.order_key().cmp(&b.order_key())
+        .then_with(|| a.name().cmp(&b.name()))
+});
+```
+
+### Diff Application Contract
+
+The `apply` method must live on the user's Diff type, not on the engine. The engine calls it but does not own the logic. This requires a trait bound:
+
+```rust
+pub trait Apply<S> {
+    fn apply(&self, state: &mut S);
+}
+```
+
+Similarly, trace entries are extracted from diffs. One clean approach: a `Traced<T>` trait:
+
+```rust
+pub trait Traced<T> {
+    fn trace_entries(&self) -> Vec<T>;
+}
+```
+
+This keeps the engine generic: `D: Apply<S> + Traced<T>`. Users implement these two traits on their diff type.
+
+---
+
+## Static Behavior Set: How to Represent It
+
+The ARCHITECTURE.md spec says behaviors are statically known at compile time. There are two clean options in Rust:
+
+### Option A: `Vec<Box<dyn Behavior<...>>>` (Recommended for MVP)
+
+```rust
+pub struct Engine<S, I, D, T, O, K> {
+    committed_state: S,
+    behaviors: Vec<Box<dyn Behavior<S, I, D, O, K>>>,
+    history: History<I, D, T>,
+}
+```
+
+Users pass a `Vec<Box<dyn Behavior<...>>>` at construction. The set is static (fixed at construction, never modified at runtime). Dynamic dispatch here is a vtable call per behavior per dispatch — negligible cost for game turn evaluation. This avoids HList complexity and makes the API ergonomic.
+
+Confidence: HIGH — this is the standard Rust pattern for this kind of plugin slot. The ARCHITECTURE.md says "avoid dynamic dispatch as a design center," which is satisfied: dynamic dispatch is used only in the behavior collection, not throughout the system.
+
+### Option B: Type-parameter HList (not recommended for MVP)
+
+Using `frunk` HLists or a hand-rolled type-level list makes the behavior set zero-cost but creates combinatorial generic complexity on `Engine`. This makes the API nearly unusable without complex type inference gymnastics. Defer to post-MVP if benchmark evidence demands it.
+
+---
+
+## Undo / Redo: Implementation Details
+
+```
+undo() -> Result<Outcome<Frame<I,D,T>, N>, EngineError>
+
+1. Check history.undo_stack.last() — if empty, return Ok(Outcome::Disallowed(NothingToUndo))
+2. frame = history.undo_stack.pop().unwrap()
+3. Apply frame.diff in REVERSE order, each diff reversed, to self.committed_state
+   OR: store snapshots of committed state alongside frames
+4. history.redo_stack.push(frame.clone())
+5. return Ok(Outcome::Undone(frame))
+```
+
+### Undo Strategy: Reverse Diff vs. Snapshot
+
+There are two implementable approaches:
+
+**Reverse diff:** Each diff type implements a `reverse()` method returning an inverse diff. Applied in reverse order. Zero extra storage per frame. Requires the user to implement `Reverse` on their diff type. This is elegant but adds a contract burden.
+
+**Snapshot:** Store `committed_state.clone()` alongside each frame in history. Undo = replace committed state with the snapshot. O(1) undo logic, O(N * state_size) memory.
+
+**Recommendation for MVP:** Snapshot approach. It has no additional trait requirements on user diff types, is trivially correct, and state size for turn-based games is small. If memory becomes an issue post-MVP, introduce `Reversible` trait.
+
+```rust
+struct HistoryEntry<I, D, T, S> {
+    frame: Frame<I, D, T>,
+    prior_state: S,   // state BEFORE this frame was committed
+}
+```
+
+Undo: `committed_state = entry.prior_state`. Return `Undone(entry.frame)`.
+
+### Irreversibility Boundary
+
+The library user calls an `Engine::mark_irreversible()` method (or a flag on dispatch). When an irreversible transition commits:
+
+1. Commit the frame normally
+2. Call `history.clear()` — erases both undo and redo stacks
+3. No further undo is possible across that boundary
+
+This matches the ARCHITECTURE.md recommended policy exactly.
+
+---
 
 ## Architectural Patterns
 
-### Pattern 1: Thin Facade lib.rs
+### Pattern 1: Opaque Engine with Generic Type Parameters
 
-**What:** `lib.rs` contains only `mod` declarations and `pub use` re-exports. Zero logic lives in it.
+**What:** The engine is a single struct with all user-supplied types as generic parameters. The engine's internals are fully hidden; only `dispatch`, `undo`, `redo`, and a constructor are public.
 
-**When to use:** Always for library crates being split into modules. This is the idiomatic Rust approach documented in The Book.
+**When to use:** Always — this is the intended design.
 
-**Trade-offs:** Slightly more boilerplate in lib.rs vs. logic spread across it, but gives consumers a stable import path independent of internal file structure.
+**Trade-offs:** Complex generic signatures at construction sites. Mitigated by type aliases in user code (`type MyEngine = Engine<MyState, MyInput, MyDiff, MyTrace, MyOutcomePayload, u32>`).
 
-**Example:**
-```rust
-// src/lib.rs
-mod hash;
-mod operation;
-mod transaction;
-mod rule;
-mod engine;
+### Pattern 2: Atomic Commit via Move Semantics
 
-pub use engine::Engine;
-pub use operation::Operation;
-pub use rule::{Rule, RuleLifetime};
-pub use transaction::Transaction;
-```
+**What:** The working state is a local variable inside `dispatch`. It is never stored inside `Engine`. On success, move the owned working copy into `self.committed_state`. On failure, the local variable is dropped.
 
-Consumers see `herdingcats::Engine`, `herdingcats::Operation`, etc. — same as today.
+**When to use:** Always. This is how atomicity is guaranteed without locks or transactions.
 
-### Pattern 2: pub(crate) for Internal Dependencies
+**Trade-offs:** None — this is idiomatic Rust. The borrow checker enforces correctness.
 
-**What:** Items used across modules within the crate but not part of the public API use `pub(crate)` visibility, not `pub`.
+### Pattern 3: Behaviors Sorted Once at Construction
 
-**When to use:** `hash.rs` exports `fnv1a_hash`, `FNV_OFFSET`, `FNV_PRIME` as `pub(crate)`. `CommitFrame` in `engine.rs` stays fully private (no `pub` at all — only `engine.rs` constructs it).
+**What:** Sort the behavior `Vec` by `(order_key, name)` when `Engine::new()` is called, not on each `dispatch()`.
 
-**Trade-offs:** More precise than making everything `pub`. Prevents accidental public API expansion during refactor.
+**When to use:** Always.
 
-**Example:**
-```rust
-// src/hash.rs
-pub(crate) const FNV_OFFSET: u64 = 0xcbf29ce484222325;
-pub(crate) const FNV_PRIME: u64 = 0x100000001b3;
+**Trade-offs:** None at MVP. Behaviors cannot be added after construction, which the spec already requires.
 
-pub(crate) fn fnv1a_hash(bytes: &[u8]) -> u64 { ... }
-```
-
-### Pattern 3: Inline #[cfg(test)] per Module
-
-**What:** Each module file contains its own `#[cfg(test)] mod tests { ... }` block testing only that module's behavior.
-
-**When to use:** Standard Rust convention. Keeps tests adjacent to the code they test. Integration tests (multi-module) go in `tests/` or in `engine.rs` tests that exercise full dispatch.
-
-**Trade-offs:** Tests are compiled as part of the module, not a separate crate, giving access to private items. This is desirable for testing `CommitFrame` internals if needed.
-
-## Backgammon Data Model
-
-### Board Representation
-
-Use a signed integer array of length 26. This is the standard compact representation:
-
-```
-indices 0..23  — the 24 points (standard backgammon numbering)
-index 24       — White's bar
-index 25       — Black's bar
-
-Positive value at point N: White has that many checkers there
-Negative value at point N: Black has that many checkers there
-Zero: point is empty
-
-Separate bear-off counters:
-white_off: u8   — checkers borne off by White
-black_off: u8   — checkers borne off by Black
-```
-
-This representation (one `[i8; 26]` plus two `u8` counters) is compact, clone-cheap, and directly encodes occupancy + ownership in a single value per point.
-
-### Dice Representation
-
-```rust
-struct Dice {
-    d1: u8,   // 1-6
-    d2: u8,   // 1-6
-    used: [bool; 2],   // which dice have been consumed
-}
-```
-
-For doubles, both dice show the same value and both must be used (standard rules allow 4 moves on doubles — out of scope per PROJECT.md, implement as 2 moves only for engine testing purposes).
-
-Dice rolls are non-deterministic (the point of choosing backgammon). They are generated via the event and wrapped in a non-deterministic, reversible transaction (`deterministic: false`).
-
-### Operation Types
-
-```rust
-enum Op {
-    // Move a checker from src point to dst point
-    MoveChecker { player: Player, from: usize, to: usize },
-
-    // Hit an opponent's blot: move it to bar
-    HitChecker { opponent: Player, point: usize },
-
-    // Reenter from bar to a point
-    Reenter { player: Player, to: usize },
-
-    // Bear off a checker from a point
-    BearOff { player: Player, from: usize },
-
-    // Consume a die (mark it used)
-    UseDie { die_index: usize },
-
-    // Record the dice roll result (for undo of die roll)
-    SetDice { d1: u8, d2: u8 },
-
-    // Advance turn
-    SwitchTurn,
-}
-```
-
-Every `Op` must implement `apply`, `undo`, and `hash_bytes`. The `undo` contract for `HitChecker` must restore the blot to its original point (not just the bar). This requires encoding the source point in the op.
-
-### Event Types
-
-```rust
-enum Event {
-    RollDice,
-    Move { from: usize, die_index: usize },  // player chooses which die to consume
-    BearOff { from: usize, die_index: usize },
-}
-```
-
-Separating `RollDice` from `Move` lets the engine exercise exactly the pattern in PROJECT.md: "undo of single-die usage." A player can undo a single checker move (one die consumed) without undoing the roll.
-
-### Rule Architecture
-
-```
-RollRule      — handles RollDice event, generates SetDice op,
-                marks tx.deterministic = false
-MoveRule      — validates checker movement, generates MoveChecker + UseDie ops,
-                generates HitChecker op if landing on blot
-ReenterRule   — handles Move event when player has checkers on bar,
-                must reenter before any other move
-BearOffRule   — handles BearOff event, validates all checkers in home board,
-                generates BearOff op
-WinRule (after hook) — checks if white_off == 15 or black_off == 15
-```
-
-### State Structure
-
-```rust
-#[derive(Clone)]
-struct BackgammonState {
-    board: [i8; 26],    // points 0-23, index 24 = white bar, 25 = black bar
-    white_off: u8,
-    black_off: u8,
-    current: Player,
-    dice: Option<Dice>,
-    winner: Option<Player>,
-}
-```
+---
 
 ## Data Flow
 
-### Dispatch Flow (Normal Move)
+### Dispatch Flow
 
 ```
-Player chooses move
-    ↓
-engine.dispatch(Event::Move { from, die_index }, Transaction::new())
-    ↓
-RollRule.before() — skips (not RollDice event)
-    ↓
-MoveRule.before():
-    - validates from point has current player's checker
-    - validates die value matches distance to destination
-    - if destination has exactly 1 opponent checker: push HitChecker op
-    - push MoveChecker op
-    - push UseDie op
-    ↓
-ops applied to state in order
-    ↓
-WinRule.after():
-    - checks white_off == 15 or black_off == 15
-    - if so: game over (set winner via op or tx.cancelled)
-    ↓
-CommitFrame pushed to undo_stack (transaction is irreversible by default)
+User calls dispatch(input)
+    │
+    ▼
+WorkingState::Borrowed(&committed_state) created
+    │
+    ▼
+For each Behavior (pre-sorted by order_key, name):
+    behavior.evaluate(&input, working.read())
+        │
+        ├─ Stop(N)  ──► drop working, return Disallowed/InvalidInput/Aborted(N)
+        │
+        └─ Continue(diffs):
+               for each diff:
+                   diff.apply(working.write())  ← triggers clone on first write
+                   accumulated_trace += diff.trace_entries()
+                   accumulated_diffs.push(diff)
+    │
+    ▼
+accumulated_diffs empty? ──► return NoChange
+    │
+    ▼
+new_state = working.into_committed()
+frame = Frame { input, diff: accumulated_diffs, trace: accumulated_trace }
+history.push(HistoryEntry { frame, prior_state: old_committed })
+committed_state = new_state
+return Committed(frame)
 ```
 
-### Non-Deterministic Dice Roll Flow
+### Undo Flow
 
 ```
-engine.dispatch(Event::RollDice, Transaction::new())
-    ↓
-RollRule.before():
-    - rolls dice: d1 = rand, d2 = rand
-    - tx.deterministic = false   ← marks this as non-deterministic
-    - tx.irreversible = true     ← but still committed
-    - push SetDice { d1, d2 }
-    ↓
-SetDice.apply() stores dice in state
-    ↓
-CommitFrame pushed — tx.deterministic = false recorded
-    ↓
-engine.undo() reverses: SetDice.undo() clears dice from state
+User calls undo()
+    │
+    ▼
+history.undo_stack empty? ──► return Disallowed(NothingToUndo)
+    │
+    ▼
+entry = history.undo_stack.pop()
+committed_state = entry.prior_state   ← snapshot restore
+history.redo_stack.push(entry.frame.clone())
+return Undone(entry.frame)
 ```
 
-The `Transaction.deterministic` flag on the frame signals to proptest and test harnesses that replaying this exact sequence requires providing the same dice values explicitly.
-
-### Undo Sequence (Single Die Undo)
-
-```
-After two dice consumed (two Move dispatches):
-
-engine.undo()  ← undoes second Move (UseDie + MoveChecker reversed)
-engine.undo()  ← undoes first Move (UseDie + MoveChecker reversed)
-engine.undo()  ← undoes RollDice (SetDice reversed, dice = None)
-```
-
-This works because each Move is its own CommitFrame. Undo is per-frame, not per-turn.
-
-## Build Order
-
-The modules have a strict dependency DAG. Build (implement) in this order:
-
-1. **hash.rs** — no dependencies, pure functions. Write tests for hash determinism here.
-2. **operation.rs** — no dependencies. Trait definition only, no tests needed beyond compile check.
-3. **transaction.rs** — no dependencies beyond `operation.rs` type parameter. Add `impl Default for Transaction<O>`.
-4. **rule.rs** — imports `Operation`, `Transaction`. Trait + `RuleLifetime` enum. Test `RuleLifetime` clone/copy semantics.
-5. **engine.rs** — imports all of the above. Tests for dispatch, undo/redo, rule lifetime decrement. This is where proptest runs.
-6. **lib.rs** — wire up `mod` declarations and `pub use`. Run `cargo test` to confirm zero regressions.
-7. **examples/backgammon.rs** — implement after lib.rs is stable. Use `use herdingcats::*;`. Follow tictactoe.rs structure exactly.
-
-Implement and test each module before moving to the next. Do not write backgammon until the library split compiles clean.
+---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Splitting by file size rather than concept
+### Anti-Pattern 1: Eager State Clone on Every Dispatch
 
-**What people do:** Move code to new files when lib.rs gets "too long," splitting arbitrarily.
-**Why it's wrong:** Results in modules with no clear ownership. `CommitFrame` ends up in `engine.rs` — that's correct, not a module of its own.
-**Do this instead:** Split by the abstraction boundary. Each module name matches a concept in the library's mental model (hash, operation, transaction, rule, engine).
+**What people do:** Clone the entire committed state at the start of every dispatch call.
 
-### Anti-Pattern 2: Making CommitFrame public
+**Why it's wrong:** Violates the CoW contract; unnecessary performance cost for large states; the prior implementation (v0.4.0) had this bug with `dispatch_preview()`.
 
-**What people do:** Assume anything crossing a module boundary needs to be `pub`.
-**Why it's wrong:** `CommitFrame` is an engine implementation detail. Making it public expands the API surface and locks in internal structure.
-**Do this instead:** Keep `CommitFrame` in `engine.rs` with no `pub`. It does not need to be visible from `lib.rs`.
+**Do this instead:** Use `WorkingState::Borrowed` until the first diff application. Clone only on first write.
 
-### Anti-Pattern 3: One mega-Op for backgammon
+### Anti-Pattern 2: Behavior State Outside the Main State Tree
 
-**What people do:** Create a single `MoveOp { from, to, hit_point: Option<usize> }` that handles all cases inline.
-**Why it's wrong:** Undo becomes coupled — `HitChecker` undo (restore blot to point) must be independently undoable from `MoveChecker` undo. If combined, a partial undo breaks the invariant.
-**Do this instead:** Separate ops for each atomic state change. Each op's undo is trivially correct in isolation. The transaction batches them in order.
+**What people do:** Store behavior counters, cooldowns, or flags as `mut` fields on the `Behavior` struct itself.
 
-### Anti-Pattern 4: Rolling dice inside a Move event
+**Why it's wrong:** State mutated inside a behavior struct bypasses the committed state, breaks undo/redo, and is not serializable. This was the exact bug in v0.4.0.
 
-**What people do:** Generate dice roll inside the `MoveRule.before()` for the first move of a turn.
-**Why it's wrong:** Breaks the engine's undo model. The dice roll would be embedded in the same CommitFrame as the first move — undoing the move also destroys knowledge of what was rolled.
-**Do this instead:** `Event::RollDice` is its own dispatch call producing its own CommitFrame. Engine can undo the roll independently from undoing moves.
+**Do this instead:** All behavior-local state lives inside `State` (e.g., `state.behaviors.my_behavior_counter`). Behaviors read it via `&S` and change it only by emitting diffs.
 
-### Anti-Pattern 5: Re-declaring mod in multiple files
+### Anti-Pattern 3: Behaviors That Mutate Working State Directly
 
-**What people do:** Write `mod operation;` in both `lib.rs` and `engine.rs`.
-**Why it's wrong:** Rust treats this as two separate modules, causing duplicate type errors at compile time. The Rust Book is explicit: declare each module exactly once.
-**Do this instead:** `mod operation;` appears only in `lib.rs`. `engine.rs` uses `crate::operation::Operation` or `use crate::operation::Operation;` to import it.
+**What people do:** Pass `&mut S` to `evaluate()` and mutate inline.
+
+**Why it's wrong:** Bypasses the diff system, loses trace, makes replay impossible, violates atomicity.
+
+**Do this instead:** `evaluate()` receives `&S` only. All mutations go through `BehaviorResult::Continue(diffs)`.
+
+### Anti-Pattern 4: Public Undo/Redo Stacks
+
+**What people do:** Expose history stacks as public fields on `Engine`.
+
+**Why it's wrong:** Breaks encapsulation; allows external code to corrupt history; was identified as a v0.4.0 bug.
+
+**Do this instead:** History is a private field. Only `undo()` and `redo()` methods can modify it.
+
+### Anti-Pattern 5: Memory-Address-Based Behavior Ordering
+
+**What people do:** Use `std::ptr::addr_of` or hash of behavior reference for ordering tiebreaking.
+
+**Why it's wrong:** Not deterministic across runs, compilations, or allocations. Was the v0.4.0 tiebreaker bug.
+
+**Do this instead:** `(order_key, behavior.name())` — both stable and deterministic.
+
+---
 
 ## Integration Points
 
-### Internal Module Boundaries
-
-| Boundary | Communication | Visibility |
-|----------|---------------|------------|
-| `engine.rs` → `hash.rs` | Direct function call to `fnv1a_hash` | `pub(crate)` |
-| `engine.rs` → `rule.rs` | `Box<dyn Rule<...>>` trait objects | `pub` (trait is public) |
-| `engine.rs` → `transaction.rs` | `Transaction<O>` fields and mutation | `pub` (struct fields are `pub`) |
-| `lib.rs` → all modules | `pub use` re-exports | N/A |
-
-### Example Boundary (examples/ to library)
+### Internal Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| `backgammon.rs` → library | `use herdingcats::*;` | Must match tictactoe.rs pattern exactly |
-| `backgammon.rs` → stdlib | `use std::...` for rand | No new runtime crate deps — use stdlib or manual LCG for dice |
+| Engine ↔ Behavior | `evaluate(&input, &state) -> BehaviorResult<D, O>` | Read-only state access; pure function from engine's perspective |
+| Engine ↔ Diff | `diff.apply(&mut working_state)`, `diff.trace_entries()` | Two trait methods on user's diff type |
+| Engine ↔ History | Internal only — `HistoryEntry` push/pop | Never exposed in public API |
+| User ↔ Engine | `dispatch()`, `undo()`, `redo()` only | Minimal surface area |
 
-Note on dice randomness: The project has zero external runtime dependencies. For dice rolls in `backgammon.rs`, use a simple approach: seed from `std::time::SystemTime` and implement a minimal LCG in the example file itself, or use `getrandom` via `#[cfg(test)]` only. The simplest path is a local function in `backgammon.rs` that reads time as a seed — no crate required.
+---
+
+## Scaling Considerations
+
+This is a library, not a service. "Scaling" means state size and behavior count.
+
+| Scale | Consideration |
+|-------|---------------|
+| < 20 behaviors, small state | Current design: no concerns. Vec + single clone if needed. |
+| 50-200 behaviors, large state (AI lookahead) | CoW avoids clone on read-only dispatches. For AI lookahead (many dispatches), ensure state Clone is efficient. The snapshot-based undo adds one extra clone per commit — acceptable. |
+| Substate granularity | If state is very large and only a few substates change per dispatch, the user can implement internal CoW in their own State type. The engine contract does not prevent this. |
+
+---
 
 ## Sources
 
-- [Separating Modules into Different Files — The Rust Book](https://doc.rust-lang.org/book/ch07-05-separating-modules-into-different-files.html) — HIGH confidence (official)
-- [Re-exports — The rustdoc book](https://doc.rust-lang.org/rustdoc/write-documentation/re-exports.html) — HIGH confidence (official)
-- [Re-Exporting and Privacy in Rust — Rheinwerk Computing](https://blog.rheinwerk-computing.com/re-exporting-and-privacy-in-rust) — MEDIUM confidence (verified against official docs)
-- [backgammon crate on docs.rs](https://docs.rs/backgammon/latest/backgammon/) — LOW confidence for data model (docs incomplete; structure inferred from rules + standard game theory)
-- Board representation: `[i8; 26]` pattern — MEDIUM confidence (multiple independent sources agree on signed-array approach; standard in academic backgammon implementations)
+- ARCHITECTURE.md in repository root (primary source, HIGH confidence)
+- PROJECT.md in `.planning/PROJECT.md` (requirements context, HIGH confidence)
+- [Rust std::borrow::Cow documentation](https://doc.rust-lang.org/std/borrow/enum.Cow.html) — confirms `ToOwned` requirement making hand-rolled approach cleaner for this use case (HIGH confidence)
+- [Enum vs Trait Object — Possible Rust](https://www.possiblerust.com/guide/enum-or-trait-object) — static vs dynamic dispatch tradeoffs (MEDIUM confidence)
+- [enum_dispatch crate](https://crates.io/crates/enum_dispatch) — alternative to `Box<dyn Trait>` if zero-cost dispatch needed post-MVP (MEDIUM confidence)
 
 ---
-*Architecture research for: herdingcats Rust library module split + backgammon example*
-*Researched: 2026-03-08*
+*Architecture research for: HerdingCats — Rust deterministic turn-based game engine library*
+*Researched: 2026-03-13*

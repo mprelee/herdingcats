@@ -1,72 +1,86 @@
 # Technology Stack
 
-**Analysis Date:** 2026-03-08
+**Analysis Date:** 2026-03-13
 
 ## Languages
 
 **Primary:**
-- Rust (Edition 2024) - All library and example code
+- Rust (Edition 2024) - Core library implementation
 
 ## Runtime
 
 **Environment:**
-- Rust native binary / library crate
-- No managed runtime
+- Rust Compiler (1.93.1+)
 
 **Package Manager:**
-- Cargo 1.93.1
-- Lockfile: `Cargo.lock` present and committed
+- Cargo (Rust's built-in package manager)
+- Lockfile: `Cargo.lock` (present)
 
 ## Frameworks
 
 **Core:**
-- None - pure Rust standard library only (`std::collections::{HashMap, HashSet}`)
+- None - This is a lightweight, zero-dependency library
 
 **Testing:**
-- Rust built-in test harness (`#[test]`, `#[cfg(test)]`) - no external test framework detected
+- proptest 1.10 - Property-based testing framework for dev dependencies
 
 **Build/Dev:**
-- Cargo (standard Rust build tool)
-- No build scripts (`build.rs`) detected
+- Cargo (build system)
+- rustfmt - Code formatting (configured in `rustfmt.toml`)
+- Clippy - Linting (via CI/CD)
 
 ## Key Dependencies
 
-**Critical:**
-- None - `[dependencies]` section in `Cargo.toml` is empty; zero external crates
+**Testing Dependencies:**
+- proptest 1.10.0 - Property-based testing generating random test cases
 
-**Standard Library Usage:**
-- `std::collections::HashMap` - rule lifetime and enabled-state tracking
-- `std::collections::HashSet` - enabled rule ID tracking
-- `std::marker::PhantomData` - compile-time state type marker in `CommitFrame`
+**Transitive Dependencies (from proptest):**
+- rand 0.9.2 - Random number generation
+- regex-syntax 0.8.10 - Regex parsing
+- semver 1.0.27 - Version parsing
+- serde 1.0.228 - Serialization framework
+- serde_json 1.0.149 - JSON serialization
+- tempfile 3.26.0 - Temporary file handling
+- rusty-fork 0.3.1 - Process forking for test isolation
+
+**Note:** The library itself has zero runtime dependencies. The dependency tree exists only for testing via proptest's property testing infrastructure.
 
 ## Configuration
 
-**Build:**
-- `Cargo.toml` at project root
-- Crate type: library (`src/lib.rs`) with examples (`examples/tictactoe.rs`)
-- Edition 2024 (requires Rust 1.85+)
-- Dual-licensed: MIT OR Apache-2.0
-
-**Publish:**
-- Published to crates.io as `herdingcats`
-- Docs published to docs.rs: `https://docs.rs/herdingcats`
-- Repository: `https://github.com/mprelee/herdingcats`
-
 **Environment:**
 - No environment variables required
-- No `.env` files present
+- No .env or configuration files
+
+**Build:**
+- `rustfmt.toml` - Code formatter configuration (edition = "2024")
+- `Cargo.toml` - Package manifest with metadata
+- `Cargo.lock` - Locked dependency versions
 
 ## Platform Requirements
 
 **Development:**
-- Rust toolchain 1.85+ (Edition 2024 requirement)
-- Detected toolchain: rustc 1.93.1, cargo 1.93.1
-- No `rust-toolchain.toml` pinning file present
+- Rust toolchain (1.93.1 or later recommended)
+- Cargo package manager
+- Unix/Linux, macOS, or Windows compatible
 
 **Production:**
-- Compiled as a Rust library crate; consumers embed it as a dependency
-- No server process, no deployment target
+- None - This is a library, not a standalone application
+- Can be compiled to library target (`*.rlib`) for use in other Rust projects
+- Published to crates.io as downloadable package
+
+## Project Metadata
+
+**License:**
+- MIT OR Apache-2.0 (dual licensing)
+
+**Distribution:**
+- crates.io registry
+- GitHub repository: https://github.com/mprelee/herdingcats
+- Documentation: https://docs.rs/herdingcats
+
+**Keywords:**
+- game, deterministic, rules, engine, turn-based
 
 ---
 
-*Stack analysis: 2026-03-08*
+*Stack analysis: 2026-03-13*

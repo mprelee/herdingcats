@@ -1,173 +1,187 @@
 # Project Research Summary
 
-**Project:** herdingcats
-**Domain:** Rust library crate — module refactoring with property-based testing for a generic stateful game rule engine
-**Researched:** 2026-03-08
+**Project:** HerdingCats
+**Domain:** Rust deterministic turn-based game engine library
+**Researched:** 2026-03-13
 **Confidence:** HIGH
 
 ## Executive Summary
 
-The herdingcats project is a Rust library crate implementing a generic game rule engine with undo/redo, deterministic replay hashing, and rule lifetime management. The milestone goal is twofold: refactor the current single-file `src/lib.rs` into a proper multi-module structure, and establish machine-verified correctness guarantees through property-based testing using proptest. Both tasks are well-understood engineering problems with established, official patterns in the Rust ecosystem. The recommended approach executes them in strict sequence — module split first, tests second — because the module structure determines where tests live, and the backgammon example (required as the proptest harness) can only be written after the library's public API is stable and verified.
+HerdingCats is a zero-dependency Rust library that provides a deterministic, ordered-behavior dispatch engine for turn-based games. Game developers implement the `Behavior` trait on their rule objects and register them with the engine; the engine drives ordered evaluation, atomic state commits, and undo/redo. The v0.4.0 release had three documented correctness bugs — behavior state stored outside the main state tree, memory-address-based ordering tiebreakers, and eager full state clones — and v0.5.0 must fix all three at the architectural level before adding any new features. The research consensus is clear: the fixes are design-level changes, not patches. Every pitfall that bit v0.4.0 has a compile-time-enforced prevention in Rust.
 
-The recommended stack is minimal: Rust 1.85+ (edition 2024) plus proptest 1.10 as a dev-dependency only. No new runtime dependencies are introduced. The module split follows the `src/module.rs` convention (not `src/module/mod.rs`), with `lib.rs` serving as a thin facade of `pub use` re-exports that preserves the existing public API surface exactly. The proptest strategy design must generate valid engine states by construction (via `prop_flat_map`) rather than filtering generated values with `prop_assume!`, which would degrade shrinking quality and make failures hard to diagnose.
+The recommended approach is to build the library in strict type-dependency order: `BehaviorResult` → `Behavior` trait → `Frame` → `Outcome`/`EngineError` → `WorkingState<S>` CoW wrapper → `History` → `Engine`. This order ensures each layer is independently testable before the next is layered on. The two highest-risk decisions that must be made in Phase 1 are (a) bundling the five engine type parameters into a single `EngineSpec` associated-type trait to prevent API ergonomic collapse, and (b) ensuring `Behavior::evaluate()` receives only `&S`, not `&mut S`, which structurally prevents all direct state mutation by behaviors.
 
-The dominant risk is silent public API breakage during the module split: items that were public in the single-file `lib.rs` become invisible to callers if their `pub use` re-exports are omitted. The mitigation is mandatory: run `cargo test --examples` after every individual module extraction — `examples/tictactoe.rs` serves as the canary for the full public surface. A secondary risk is incomplete property test assertions: undo/redo tests that only check `engine.state` and skip `engine.replay_hash()` will miss an entire class of hash-related bugs. Both risks are avoidable with discipline and can be codified as phase exit criteria.
+The primary risk is over-complicating static dispatch. Research examined `Vec<Box<dyn Behavior>>` versus tuple-based static dispatch and found that `Vec<Box<dyn Behavior>>` is the correct MVP choice: fixed at construction, never modified at runtime, vtable overhead negligible for turn evaluation, and ergonomically straightforward. Tuple-based static dispatch is a post-MVP optimization if benchmarks demand it. The two working examples — tic-tac-toe (minimal) and backgammon (exercises dice-roll irreversibility) — must both be fully implemented in v0.5.0 to validate the public API against real game logic.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The stack is deliberately narrow. proptest 1.10 (MSRV 1.84, fully compatible with the project's Rust 1.85+) is the only new addition and belongs in `[dev-dependencies]` only — it must never appear in `[dependencies]`. The `src/module.rs` file convention (introduced in Rust 2018 edition) is the community standard and should be used for all five new module files. The Rust 2024 edition introduces no module-system changes, so the edition upgrade is safe. For shared integration test fixtures, `tests/common/mod.rs` is the correct pattern — `tests/common.rs` would pollute `cargo test` output with a "running 0 tests" entry.
+HerdingCats requires Rust 2024 edition (1.85+) which brings improved RPIT lifetime capture rules and cleaner library error messages — directly useful for a trait-heavy API. There are zero runtime dependencies; this is a hard architectural constraint. Dev dependencies are `proptest` (1.x) for invariant testing and `proptest-state-machine` (0.3) for modeling the engine as a reference state machine and verifying operation-sequence invariants. No other tooling is required.
+
+The critical language-level patterns are: (1) `WorkingState<'a, S>` with a `Borrowed`/`Owned` enum (not `std::borrow::Cow`, which requires `ToOwned` and is designed for string/slice scenarios); (2) `(order_key, behavior_name)` as the deterministic composite sort key — never pointer addresses; (3) `&'static str` for behavior names to avoid heap allocation and enable stable ordering across compilations.
 
 **Core technologies:**
-- Rust 1.85+ (edition 2024): language runtime — already in use, no regressions from edition upgrade
-- proptest 1.10: property-based testing — hypothesis-style shrinking via value trees; superior to quickcheck for finding minimal counterexamples; dev-dependency only
-
-**Supporting tools:**
-- cargo test --examples: exit criterion for each module extraction step
-- cargo clippy: catch dead_code and API visibility issues pre-commit
-- cargo doc --no-deps: verify re-exported items surface correctly after split
+- Rust 2024 edition (1.85+): language — 2024 edition RPIT and diagnostic attributes reduce noise in trait-heavy library APIs
+- Cargo workspaces: build system — no alternative; use workspaces if examples grow into a separate crate
+- proptest + proptest-state-machine: dev-only testing — property-based invariant testing; generates thousands of random inputs and shrinks failures automatically
+- rustfmt + clippy: formatting and lint — enforce via CI; clippy `-D warnings` catches iterator anti-patterns and unnecessary clones before review
 
 ### Expected Features
 
-The correctness properties the engine must demonstrably satisfy fall into two priority tiers. P1 features establish that the engine's core guarantees (undo/redo correctness, hash determinism, preview isolation, rule lifecycle reversibility) are machine-verified. P2 features add depth but are not required to make the correctness claim credible. The backgammon example is a P1 delivery because it is the required harness for the headline undo/redo walk property test.
+The v0.5.0 feature set is authoritative and complete. The `Behavior` trait, `BehaviorResult`, `Outcome`, `EngineError`, `Frame`, `dispatch`, `undo`, `redo`, CoW working state, and irreversibility boundary are all P1 — none can be deferred. The two examples are also P1 because they validate the API against real game logic. Everything else (history replay API, `NeedsChoice`, derive macros, DSL) defers to v0.5.x or later.
 
-**Must have (table stakes — P1):**
-- Operation round-trip property test (apply + undo returns to prior state) — the foundation all other undo properties rest on
-- Hash determinism property test — proves FNV-1a accumulation is pure
-- Undo restores state identity + replay hash round-trip — the core engine guarantee, dual-asserted
-- `dispatch_preview` zero side effects test — proves preview is safe to call freely
-- Cancelled transaction leaves state unchanged — proves cancellation does not corrupt state
-- `RuleLifetime::Triggers` and `::Turns` undo correctness — proves rule lifecycle is reversible
-- Arbitrary-length undo/redo walk using backgammon (proptest, N dispatches then N undos) — headline property
-- Backgammon board conservation invariant — domain-level property
-- Partial move undo with one die — exercises the non-determinism use case
+**Must have (table stakes):**
+- `Behavior` trait with `name() -> &'static str`, `order_key() -> K`, `evaluate(&I, &S) -> BehaviorResult<D, O>` — the user's only extension point
+- `BehaviorResult<D, O>`: `Continue(Vec<D>)` / `Stop(O)` — behavior contract
+- `dispatch(input, reversibility) -> Result<Outcome, EngineError>` — atomic, ordered, immediate-diff, trace-generating
+- `Outcome` enum: `Committed`, `Undone`, `Redone`, `NoChange`, `InvalidInput`, `Disallowed`, `Aborted`
+- `EngineError` strictly for engine-internal failures — never domain outcomes
+- `Frame<I, D, T>`: canonical committed transition record with input, diff, trace
+- CoW `WorkingState<S>`: no eager clone; lazy copy on first write
+- `undo()` / `redo()` with explicit `Reversibility` argument on dispatch
+- Tic-tac-toe example (minimal, full API surface)
+- Backgammon example (exercises dice-roll irreversibility)
 
-**Should have (competitive — P2, add after P1 is green):**
-- Undo/redo alternation invariant (dispatch, undo, redo repeated N times)
-- Preview commutes with dispatch property
-- State machine transition fuzz with `proptest-state-machine`
-- Hash order-dependence test
+**Should have (competitive):**
+- Irreversibility boundary: explicit `Reversibility` param on `dispatch()`, erases undo/redo history on irreversible commit — compile-time forced choice, not an opt-in default
+- Diff-as-record in Frame: enables replay, network sync, and time-travel debugging
+- `EngineError` distinct from domain outcomes: `Result<Outcome, EngineError>` with `#[non_exhaustive]` on `EngineError`
+- Live working state visible to later behaviors: immediate diff application, not deferred batching
+- Zero runtime dependencies: embeddable in WASM, server-side AI workers, embedded systems
 
-**Defer (v2+):**
-- Concurrent dispatch safety — only relevant if `Engine` ever becomes `Send`; out of scope
-- Exhaustive backgammon legality testing — belongs in a separate game-layer suite
+**Defer (v0.5.x+):**
+- `NeedsChoice` outcome / interactive dispatch branching — requires suspending and resuming dispatch state; needs concrete use case before design
+- History replay / frame iterator API — add when replay or time-travel debugging is requested
+- Derive macros for `Diff` — add when users report boilerplate fatigue
+- DSL / card-text compilation — long-term direction; requires mature behavior model first
 
 ### Architecture Approach
 
-The architecture is a five-module split of the existing `src/lib.rs`, with strict dependency ordering: hash -> operation -> transaction -> rule -> engine. Each module is a single `.rs` file using the `src/module.rs` convention. `lib.rs` becomes a pure facade with no logic, only `mod` declarations and explicit `pub use` re-exports. `CommitFrame` stays private inside `engine.rs` — it is never made public. The backgammon example (`examples/backgammon.rs`) is built after the library split is stable and green, mirroring the structure of the existing `examples/tictactoe.rs`. Dice randomness uses a local LCG or `std::time::SystemTime` seed — no new runtime crates.
+The engine is a thin orchestrator: it owns dispatch logic, behavior ordering, CoW working state, and history stacks. All domain types are supplied via generic type parameters bundled under a single `EngineSpec` associated-type trait. The module structure is flat — `lib.rs` (re-exports only), `behavior.rs`, `outcome.rs`, `frame.rs`, `working_state.rs`, `history.rs`, `engine.rs` — with no subfolders needed at MVP scale. The type dependency graph is acyclic and each layer is independently testable.
+
+The critical architectural decision is the undo strategy: snapshot-based (store `prior_state: S` alongside each `Frame`) rather than reverse-diff (requires a `Reversible` trait on user diff types). Snapshot undo has no additional trait requirements on user types, is trivially correct, and state size for turn-based games is small. Behaviors are stored in a `Vec<Box<dyn Behavior>>` sorted once at `Engine::new()` — dynamic dispatch at the behavior collection is the accepted MVP tradeoff.
 
 **Major components:**
-1. `src/hash.rs` — FNV-1a 64-bit hash function and constants, `pub(crate)` visibility only
-2. `src/operation.rs`, `src/transaction.rs`, `src/rule.rs` — trait and type definitions, leaf nodes in dependency DAG
-3. `src/engine.rs` — `Engine<S,O,E,P>` struct, `CommitFrame` (private), all dispatch/undo/redo logic; the integration point
-4. `src/lib.rs` — thin facade: `mod` declarations + explicit `pub use` re-exports
-5. `examples/backgammon.rs` — concrete game implementation using `use herdingcats::*;`, serves as both working example and proptest harness
+1. `Engine<G: EngineSpec>` — owns committed state + history; exposes `dispatch`, `undo`, `redo`
+2. `WorkingState<'a, S>` — CoW wrapper: `Borrowed(&S)` until first write, `Owned(S)` after; dropped on failure, moved into committed on success
+3. `Behavior` trait — `name()`, `order_key()`, `evaluate(&I, &S)` — user extension point; immutable evaluate enforced by signature
+4. `History<I, D, T>` — two `Vec<HistoryEntry>` stacks (undo + redo); private; query-only API
+5. `Frame<I, D, T>` — canonical committed record: input + diff vec + trace vec
+6. `Outcome<F, N>` + `EngineError` — `Result<Outcome, EngineError>` where `Ok` carries all domain outcomes including rejected ones
 
 ### Critical Pitfalls
 
-1. **Incomplete `pub use` re-exports break the public API** — After each module extraction, run `cargo test --examples` before continuing. `tictactoe.rs` compilation is the non-negotiable canary. Never use `pub use module::*` glob re-exports; every re-exported item must be named explicitly.
-
-2. **`prop_assume!` filtering degrades shrinking quality** — Do not use rejection sampling to constrain game states. Build valid-state strategies by construction using `prop_flat_map`. Reserve `prop_assume!` only for conditions with <5% rejection rate.
-
-3. **Undo tests that skip `replay_hash` assertion hide hash bugs** — Every undo/redo roundtrip assertion must check both `engine.read() == original_state` AND `engine.replay_hash() == original_hash`. Define a snapshot helper that captures both and use it as the baseline in all roundtrip tests.
-
-4. **Single final assertion in stateful tests misses mid-sequence bugs** — Check invariants after each dispatch step, not only at the end. A rule lifetime double-decrement that cancels out over N steps is undetectable with only a terminal assertion.
-
-5. **`Box<dyn Rule>` is not `Clone` — do not attempt `Arbitrary` for `Engine`** — Generate test scenarios as `(initial_state, Vec<Event>)`, build the engine in the test body via `Engine::new()` + `engine.dispatch()`, and use concrete test rule structs (not trait objects) inside test modules.
+1. **Generic type parameter explosion** — bundle `S, I, D, T, O, K` into a single `EngineSpec` associated-type trait from the first commit; retrofitting is a breaking API change
+2. **Behavior state outside the main state tree** — the `Engine` struct must hold no mutable behavior configuration; enforce at the type level: behaviors are stateless rule objects
+3. **Memory address as ordering tiebreaker** — sort must use `(order_key, behavior_name)` tuple; `name()` returns `&'static str`; never use pointer values for comparison
+4. **Eager full state clone instead of CoW** — `WorkingState<'a, S>` with `Borrowed`/`Owned` enum; `dispatch()` must not contain `state.clone()` before the first diff application
+5. **Outcome/EngineError conflation** — `Disallowed`, `InvalidInput`, `Aborted` belong in `Outcome`; `EngineError` is strictly for engine-internal impossible states; mark `#[non_exhaustive]`
+6. **Irreversibility with no compile-time enforcement** — `dispatch()` takes an explicit `Reversibility` parameter; callers cannot forget to declare it
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure:
+Based on research, the type dependency graph is the natural phase boundary. Each phase must be fully correct before the next begins because later types depend on earlier ones and retrofitting is expensive (some changes are breaking API changes).
 
-### Phase 1: Module Split
-**Rationale:** The module structure must be stable before tests can be placed correctly. Every subsequent phase (proptest, backgammon example) depends on knowing which file owns which code. This phase has a strict sequential sub-order dictated by the dependency DAG: hash -> operation -> transaction -> rule -> engine -> lib.rs facade.
-**Delivers:** A compilable, fully-tested (existing tests pass), multi-module library crate with identical public API surface to the current single-file version.
-**Addresses:** STACK.md module organization patterns; ARCHITECTURE.md component responsibilities and build order.
-**Avoids:** Pitfall 1 (incomplete re-exports) and Pitfall 2 (glob shadow) — exit criterion for every module extraction step is green `cargo test --examples`.
-**Research flag:** Standard patterns — skip phase-level research. Official Rust Book patterns apply directly.
+### Phase 1: Core Types and Trait Contracts
 
-### Phase 2: Engine Property Tests (inline `#[cfg(test)]`)
-**Rationale:** Engine unit properties (Operation round-trip, hash determinism, undo/redo correctness, preview isolation, rule lifetime lifecycle) are independent of the backgammon game model. They test the generic engine against simple concrete types (e.g., `u8` state). These must be established and green before the backgammon harness is written, so failures can be attributed unambiguously to engine logic, not to game-layer complexity.
-**Delivers:** Machine-verified correctness for all P1 engine mechanics: operation contracts, hash accumulation, undo/redo stack behavior, rule lifetime reversibility, preview isolation, cancelled transaction invariant.
-**Uses:** proptest 1.10 with `proptest!` macro, `prop_compose!`, and inline `#[cfg(test)] mod tests { use super::*; }` pattern.
-**Implements:** All P1 table-stakes features except the backgammon-dependent ones.
-**Avoids:** Pitfall 3 (test visibility across modules), Pitfall 5 (single final assertion), Pitfall 6 (`Box<dyn Rule>` blocking Arbitrary), Pitfall 7 (missing hash assertion).
-**Research flag:** Standard proptest patterns apply; skip phase-level research. The `prop_flat_map` strategy pattern is documented in the official proptest book.
+**Rationale:** The entire library depends on these types. `EngineSpec`, `BehaviorResult`, `Behavior` trait, `Frame`, `Outcome`, and `EngineError` must be designed together because getting them wrong requires breaking API changes. Five of the ten pitfalls are prevention-phase 1: generic explosion, behavior state placement, memory-address ordering, Outcome/EngineError conflation, behaviors mutating working state, and HashMap non-determinism. Fix them all in the type signatures before any logic is written.
 
-### Phase 3: Backgammon Example and Integration Property Tests
-**Rationale:** The backgammon example is gated on Phase 1 (stable public API) and Phase 2 (engine correctness confirmed). It serves two purposes: a runnable example demonstrating the engine for non-deterministic games with partial-move undo, and the harness for the headline undo/redo walk property test. This phase is more complex because it requires designing the board representation, op types, event types, and rule architecture — all of which must implement the engine's generic traits correctly.
-**Delivers:** `examples/backgammon.rs`, `tests/common/mod.rs` shared fixture, and the integration property tests: arbitrary-length undo/redo walk, board conservation invariant, partial move undo with one die.
-**Uses:** Backgammon board as `[i8; 26]` + bear-off counters, `prop_flat_map` for dice-constrained move generation, `tests/common/mod.rs` for shared fixtures.
-**Implements:** All remaining P1 features (backgammon-dependent properties), plus lays groundwork for P2 state machine tests.
-**Avoids:** Pitfall 4 (`prop_assume!` breaking shrinking) — board states are generated by construction. Architecture anti-patterns: rolling dice inside a Move event, one mega-Op for all move types.
-**Research flag:** Moderate — backgammon data model is medium-confidence (inferred from rules + standard game theory). Validate the `[i8; 26]` board representation and rule architecture against the actual game mechanics early in this phase before writing proptest strategies.
+**Delivers:** A compilable crate with all public types defined, documented with rustdoc, and exercised in doc-tests. No dispatch logic yet.
 
-### Phase 4: P2 Property Tests and Polish
-**Rationale:** Once P1 correctness is green and the backgammon harness exists, P2 properties (undo/redo alternation invariant, preview commutes with dispatch, hash order-dependence) are straightforward additions. State machine fuzzing with `proptest-state-machine` is the highest-effort P2 item and should be added last, after simpler properties have exercised the engine adequately.
-**Delivers:** Deeper confidence properties, final CI stability verification, and optional `proptest-state-machine` integration.
-**Implements:** All P2 features from FEATURES.md.
-**Research flag:** `proptest-state-machine` crate (version 0.3) may need a quick verification of current API compatibility at implementation time — the core pattern is documented but the crate is less mature than proptest core.
+**Addresses:** `Behavior` trait, `BehaviorResult`, `Outcome`, `EngineError`, `Frame<I, D, T>`, `EngineSpec` bundling
+
+**Avoids:** Generic type parameter explosion (Pitfall 5), Outcome/EngineError conflation (Pitfall 8), behaviors mutating working state (Pitfall 9), HashMap non-determinism (Pitfall 10), memory address ordering (Pitfall 2)
+
+### Phase 2: CoW Working State and Dispatch Algorithm
+
+**Rationale:** `WorkingState<'a, S>` is the most mechanically complex component and is a prerequisite for a correct dispatch loop. Dispatch must be implemented together with CoW to avoid the eager-clone anti-pattern becoming permanent. The `dispatch_preview()` dirty-preview anti-pattern (Pitfall 4) must also be addressed here: there is no separate preview path; discarded dispatches are the preview.
+
+**Delivers:** `dispatch(input, reversibility) -> Result<Outcome, EngineError>` — atomic, ordered, immediate-diff, trace-generating. `WorkingState` fully implemented and unit tested.
+
+**Uses:** Rust 2024 edition lifetime capture rules (relevant to `WorkingState<'a, S>` lifetime); `proptest` for dispatch determinism invariants
+
+**Implements:** `WorkingState`, `Engine::dispatch()`, behavior ordering (sorted once at construction), `Apply<S>` and `Traced<T>` traits on user diff types
+
+**Avoids:** Eager full state clone (Pitfall 3), dirty preview side effects (Pitfall 4)
+
+### Phase 3: Undo, Redo, and Irreversibility
+
+**Rationale:** Undo/redo are mechanical inverses of dispatch but introduce new design decisions: snapshot vs reverse-diff, public vs private stack API, and the compile-time enforcement of irreversibility. All three must be decided together because they affect `dispatch()`'s signature (the `Reversibility` parameter). The undo stack must be private from the first commit (Pitfall 6).
+
+**Delivers:** `undo()` and `redo()` with full `Undone`/`Redone`/`Disallowed` outcomes. `Reversibility` parameter on `dispatch()`. `History` struct with private stacks and query-only API. Irreversibility boundary clears both stacks on irreversible commit.
+
+**Implements:** `History<I, D, T>`, `HistoryEntry` with `prior_state` snapshot, `Engine::undo()`, `Engine::redo()`, `Engine::mark_irreversible()` / dispatch signature update
+
+**Avoids:** Public undo/redo stacks (Pitfall 6), irreversibility with no enforcement (Pitfall 7)
+
+### Phase 4: Working Examples (Tic-Tac-Toe + Backgammon)
+
+**Rationale:** Examples are P1, not documentation afterthoughts. They are the integration test that validates whether the public API is actually usable for real games. Tic-tac-toe exercises the minimal happy path; backgammon exercises dice-roll irreversibility, multiple legal move generation, and the full undo/redo contract. These cannot be deferred — the API's ergonomic problems only surface when a real game is implemented.
+
+**Delivers:** Two fully working example games in `examples/`. Both compile, run, and demonstrate the full API surface. Backgammon demonstrates irreversibility clearing undo history after a dice roll.
+
+**Addresses:** Tic-tac-toe example (P1), Backgammon example (P1)
 
 ### Phase Ordering Rationale
 
-- The module split comes first because it is a prerequisite for everything: test file placement, public API stability, and backgammon example compilation all depend on a clean module structure.
-- Engine properties come before backgammon because the dependency graph in FEATURES.md is explicit: "Operation round-trip is the foundation; if it fails, all higher-level undo tests fail for the wrong reason."
-- The backgammon phase comes third because it has a hard sequential dependency on both the stable API (Phase 1) and confirmed engine correctness (Phase 2).
-- P2 polish comes last because it adds depth without being foundational.
-- This ordering also minimizes the blast radius of bugs: failures in Phase 2 are cleanly attributable to engine logic, not game-layer implementation choices.
+- Phase 1 must precede all other phases because type changes after the API is in use are breaking changes
+- Phase 2 (dispatch) must follow Phase 1 (types) because the dispatch algorithm is parameterized by those types
+- Phase 3 (undo/redo) must follow Phase 2 (dispatch) because the undo stack is populated by dispatch; both must share the `Reversibility` parameter on `dispatch()`
+- Phase 4 (examples) comes last to validate all prior phases; early examples would need to be rewritten as the API evolves
+- This ordering exactly matches the type dependency graph in ARCHITECTURE.md — no circular dependencies, each phase independently testable
 
 ### Research Flags
 
-Phases needing deeper research during planning:
-- **Phase 3 (Backgammon):** Validate the backgammon board data model (`[i8; 26]` representation) and op/event/rule decomposition against actual game mechanics before writing proptest strategies. The board representation is MEDIUM-confidence (inferred, not from an authoritative source). Recommend one early spike to verify the bearing-off and hit/reenter operations implement correctly before building the strategy infrastructure around them.
+Phases likely needing deeper research during planning:
+- **Phase 2:** The `Apply<S>` and `Traced<T>` trait design has ergonomic implications for users; the exact trait bounds and method signatures need validation against the backgammon use case before being finalized
+- **Phase 3:** The snapshot undo strategy is recommended but the memory implications for long-running sessions should be quantified; if AI lookahead dispatches thousands of times, history pruning may be needed
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1 (Module Split):** Official Rust Book patterns, HIGH confidence, direct applicability.
-- **Phase 2 (Engine Properties):** Official proptest documentation covers all required patterns at HIGH confidence.
-- **Phase 4 (P2 Polish):** Extends Phase 2 and 3 patterns; only `proptest-state-machine` API needs a quick version-check at implementation time.
+- **Phase 1:** Type design in Rust is well-documented; `EngineSpec` associated-type bundling is a standard library pattern with no unknowns
+- **Phase 4:** Example implementation follows directly from API; no research needed
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | proptest 1.10 verified on docs.rs; module conventions from official Rust Book and edition guide |
-| Features | HIGH | Proptest strategy patterns from official docs; feature prioritization based on direct analysis of engine code |
-| Architecture | HIGH | Module split patterns from official Rust Book; backgammon data model MEDIUM (standard game theory + multiple independent sources agree) |
-| Pitfalls | HIGH | Re-export semver pitfalls from cargo-semver-checks maintainer + official Cargo Book; proptest filtering pitfall from official proptest book + 2024 practitioner case studies |
+| Stack | HIGH | Rust 2024 edition, proptest, zero-dependency constraint all verified against official sources; no speculative dependencies |
+| Features | HIGH | Feature set derived from authoritative ARCHITECTURE.md and PROJECT.md specs; competitor analysis (boardgame.io, Asmodee) corroborates feature choices |
+| Architecture | HIGH | Architecture spec is authoritative in repository; all Rust patterns verified against std docs; CoW and static dispatch patterns are well-established |
+| Pitfalls | HIGH | Nine of ten pitfalls are grounded in v0.4.0 known issues from CONCERNS.md; one (generic explosion) is derived from Rust community consensus |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Backgammon board representation validation:** The `[i8; 26]` signed-array model is the standard choice cited by multiple sources but is MEDIUM-confidence because no single authoritative Rust backgammon implementation was available for direct verification. Validate the bearing-off edge case (how borne-off checkers interact with the bar index encoding) before writing the proptest board strategy.
-- **`proptest-state-machine` API stability:** Version 0.3 is referenced in research but it is a less-mature crate. At Phase 4 implementation time, verify the current API against the installed version to avoid surprises.
-- **Doubles rule scope:** PROJECT.md limits doubles to 2 moves (not the standard 4). This simplification is noted in ARCHITECTURE.md but was not validated against any existing implementation. Confirm this is intentional before writing the dice strategy that generates doubles.
+- **`NeedsChoice` design:** Deferred to v0.5.x but the backgammon bearing-off example may surface this requirement; flag during backgammon implementation and decide whether to design the suspension model before v0.5.0 ships
+- **`EngineSpec` ergonomics:** The associated-type bundling approach eliminates turbofish at construction but may make trait bounds verbose in user impl blocks; validate against real game code in Phase 4 and document type alias patterns
+- **History pruning policy:** Snapshot undo stores one state clone per committed frame; long sessions or AI-heavy games may need a max-history-depth setting; out of scope for MVP but worth noting as a v0.5.x concern
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [docs.rs/proptest/latest](https://docs.rs/proptest/latest/proptest/) — proptest version, Cargo.toml setup, macro reference, filtering/shrinking behavior
-- [Rust Book ch11-03 Test Organization](https://doc.rust-lang.org/book/ch11-03-test-organization.html) — `tests/common/mod.rs` pattern
-- [Rust Book ch07-05 Separating Modules into Different Files](https://doc.rust-lang.org/book/ch07-05-separating-modules-into-different-files.html) — module split conventions
-- [Rust Edition Guide — 2024](https://doc.rust-lang.org/edition-guide/rust-2024/index.html) — no module-system changes confirmed
-- [Proptest State Machine Testing — official proptest book](https://proptest-rs.github.io/proptest/proptest/state-machine.html) — state machine test patterns
-- [Proptest Filtering Documentation — official proptest book](https://altsysrq.github.io/proptest-book/proptest/tutorial/filtering.html) — shrinking degradation via prop_assume
-- [Breaking semver in Rust by adding a private type or import — predr.ag](https://predr.ag/blog/breaking-semver-in-rust-by-adding-private-type-or-import/) — pub use glob shadow pitfall
-- [SemVer Compatibility — The Cargo Book](https://doc.rust-lang.org/cargo/reference/semver.html) — re-export visibility rules
-- [Visibility and Privacy — The Rust Reference](https://doc.rust-lang.org/reference/visibility-and-privacy.html) — pub(crate) semantics
-- [Stateful Property Testing in Rust — Readyset Engineering Blog, 2024](https://readyset.io/blog/stateful-property-testing-in-rust) — per-step invariant checking patterns
+- ARCHITECTURE.md (repository root) — authoritative v0.5.0 design spec
+- PROJECT.md (`.planning/PROJECT.md`) — validated requirements and out-of-scope items
+- CONCERNS.md — v0.4.0 known issues (behavior lifetimes, address tiebreaker, eager clone, public stacks)
+- [Announcing Rust 1.85.0 and Rust 2024 — Rust Blog](https://blog.rust-lang.org/2025/02/20/Rust-1.85.0/) — 2024 edition features
+- [std::borrow::Cow — Rust std docs](https://doc.rust-lang.org/std/borrow/enum.Cow.html) — Cow semantics and ToOwned requirements
+- [PhantomData — Rust std docs](https://doc.rust-lang.org/std/marker/struct.PhantomData.html) — variance and drop-check semantics
+- [Generic associated types stable in Rust 1.65 — Rust Blog](https://blog.rust-lang.org/2022/10/28/gats-stabilization/) — GAT stability and pitfalls
 
 ### Secondary (MEDIUM confidence)
-- [Higher-Order Strategies — Proptest Book](https://altsysrq.github.io/proptest-book/proptest/tutorial/higher-order.html) — prop_compose / flat_map patterns
-- [Exploring Round-trip Properties in Property-based Testing — PLClub (2023)](https://www.cis.upenn.edu/~plclub/blog/2023-12-07-round-trip-properties/) — round-trip property design
-- [Property Testing Stateful Code in Rust — rtpg.co, 2024](https://rtpg.co/2024/02/02/property-testing-with-imperative-rust/) — practitioner stateful testing case study
-- [Model-Based Stateful Testing with proptest-state-machine — Nikos Baxevanis, 2025](https://blog.nikosbaxevanis.com/2025/01/10/state-machine-testing-proptest/) — state machine test structure
-- Board representation `[i8; 26]` — MEDIUM (multiple independent sources; standard in academic backgammon implementations)
+- [proptest-state-machine — crates.io](https://crates.io/crates/proptest-state-machine) — state machine testing API
+- [Rust Static vs. Dynamic Dispatch — SoftwareMill](https://softwaremill.com/rust-static-vs-dynamic-dispatch/) — performance benchmark (~3x difference; illustrative)
+- [boardgame.io documentation](https://boardgame.io/documentation/) — competitor feature analysis
+- [Asmodee Rules Engine Architecture](https://doc.asmodee.net/rules-engine) — input validation and event sourcing patterns
+- [Item 12: Understand the trade-offs between generics and trait objects — Effective Rust](https://www.lurklurk.org/effective-rust/generics.html) — static vs dynamic dispatch ergonomics
+- [undo crate — docs.rs](https://docs.rs/undo) — existing Rust undo/redo patterns
+- [Transactional Operations in Rust](https://fy.blackhats.net.au/blog/2021-11-14-transactional-operations-in-rust/) — atomicity pitfalls
+- [Rusty Garbage: My HashMap is non-deterministic — Medium](https://medium.com/@draft1967/rusty-garbage-my-hashmap-is-non-deterministic-0e518be0c5c6) — HashMap non-determinism in game state
 
 ### Tertiary (LOW confidence)
-- [backgammon crate on docs.rs](https://docs.rs/backgammon/latest/backgammon/) — board model reference; docs incomplete, used as secondary validation only
+- [WebSearch results on HList/frunk] — confirmed frunk is a real dependency; recommendation to avoid is based on zero-dependency project constraint
 
 ---
-*Research completed: 2026-03-08*
+*Research completed: 2026-03-13*
 *Ready for roadmap: yes*

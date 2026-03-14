@@ -1,8 +1,22 @@
 # Feature Research
 
-**Domain:** Property-based testing of a generic Rust game rule engine with undo/redo
-**Researched:** 2026-03-08
-**Confidence:** HIGH (proptest docs verified via official sources and docs.rs)
+**Domain:** Deterministic turn-based game engine library (Rust)
+**Researched:** 2026-03-13
+**Confidence:** HIGH (architecture spec authoritative; ecosystem survey via boardgame.io, Asmodee rules engine, Rust game dev community)
+
+---
+
+## Context: What "Users" Means Here
+
+Users of herdingcats are **game developers writing Rust**, not end players. The feature surface is the library's API and trait contracts. A game developer using herdingcats needs to:
+
+1. Define their game state and rules (as behaviors, diffs, outcomes)
+2. Drive the engine with inputs
+3. Read results back (outcomes, frames, traces)
+4. Undo/redo moves
+5. Reason about history and state
+
+Features are evaluated against this developer experience.
 
 ---
 
@@ -10,201 +24,193 @@
 
 ### Table Stakes (Users Expect These)
 
-These are correctness properties the engine must demonstrably satisfy. A library claiming determinism and undo/redo soundness without these tests is not credible.
+Features that any rules-engine library must have. Missing these means the library cannot be used to build a real game.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Operation round-trip: apply then undo returns to prior state | The core contract of `Operation<S>` — if `undo` is wrong, everything downstream breaks | LOW | Pure property: `op.apply(&mut s); op.undo(&mut s); assert!(s == original)`. Needs `PartialEq` on state. |
-| Hash determinism: same `hash_bytes()` sequence always produces same replay hash | FNV-1a is deterministic by definition; test proves the implementation is correct | LOW | Generate arbitrary op sequences, run twice from same state, assert hashes match. |
-| Undo restores state identity | `engine.dispatch(...)` then `engine.undo()` must leave state identical to before dispatch | MEDIUM | Requires generating valid transactions. State must implement `PartialEq + Clone`. |
-| Redo re-applies state correctly | After `undo`, `redo` must produce the same post-dispatch state | MEDIUM | Builds on undo correctness. Test: dispatch, capture state A; undo; redo; assert state == A. |
-| Undo/redo replay hash round-trip | `replay_hash` after undo must equal pre-dispatch hash; after redo must equal post-dispatch hash | MEDIUM | The `CommitFrame` stores `state_hash_before` and `state_hash_after` for exactly this purpose. |
-| Cancelled transaction leaves state unchanged | When `tx.cancelled = true`, no ops are applied and engine state is unmodified | LOW | Unit test: cancel a transaction, assert state and hash unchanged. |
-| Non-reversible transaction clears redo stack | After a fresh `dispatch`, `redo` must be a no-op (redo stack cleared in code) | LOW | Structural: dispatch, undo, dispatch again, verify redo does nothing. |
-| `dispatch_preview` has zero lasting side effects | State, hash, lifetimes, enabled set all restored after preview | LOW | Capture all mutable fields before preview, assert all equal after. |
-| Rule priority ordering is stable | Rules with lower priority value run before higher (sort_by_key on add_rule) | LOW | Add rules in reverse priority order, dispatch, verify `before` hooks fire in correct sequence via side-effect log. |
+| `dispatch(input) -> Result<Outcome, EngineError>` | Core operation. Without it there is no engine. | MEDIUM | Atomic: either commits fully or leaves state unchanged |
+| Ordered behavior evaluation | The library's central value. Without ordering, rule interactions are ambiguous. | MEDIUM | `(order_key, behavior_name)` deterministic ordering |
+| `BehaviorResult::Continue(Vec<D>)` / `Stop(O)` | Behaviors need to either contribute or halt. The two-branch return is the fundamental behavior contract. | LOW | Halt-on-Stop must immediately discard working state |
+| Atomic dispatch (all-or-nothing) | Without atomicity, partial failures corrupt state. Every comparable system (boardgame.io, Asmodee rules engine) enforces this. | MEDIUM | Working state is speculative; only committed on success |
+| `Outcome` enum with `Committed`, `NoChange`, `InvalidInput`, `Disallowed`, `Aborted` | Game logic must distinguish "move was rejected" from "move changed nothing" from "engine broke". boardgame.io and the Asmodee rules engine both enforce input validation at the engine layer. | LOW | `EngineError` is separate — engine malfunction, not domain outcome |
+| `Frame { input, diff, trace }` | Canonical transition record. Without it, undo/redo has no substrate, replay is impossible, and debugging is blind. | LOW | Produced only on successful non-empty dispatch |
+| `undo() -> Result<Outcome, EngineError>` | Any game with meaningful choices needs undo. Users asked for it in boardgame.io (issue #95). Mobile games need it for mis-tap recovery. | MEDIUM | Returns `Undone(frame)` or `Disallowed(NothingToUndo)` |
+| `redo() -> Result<Outcome, EngineError>` | Undo without redo is incomplete. Standard pairing in every command-pattern implementation. | LOW | Returns `Redone(frame)` or `Disallowed(NothingToRedo)` |
+| Trace generation synchronized with dispatch | UIs need to know *why* state changed (e.g., "monster died") without re-deriving it from state. Asmodee rules engine explicitly recommends this. | MEDIUM | Trace is generated at diff-apply time, not reconstructed |
+| Behavior state lives in main state tree | Without this, undo/redo breaks (behavior state diverges from committed state). This is a correctness requirement, not a feature. | LOW | Enforced by architecture; no hidden engine-internal mutable state |
+| Copy-on-write working state | Without CoW, every dispatch eagerly clones the full game state. For AI look-ahead (many speculative dispatches) this is prohibitive. | HIGH | Read from committed until first write; clone substate on first write |
+| Static behavior set (compile-time) | Dynamic registration destroys type safety and determinism guarantees. The library's value proposition depends on statically known, ordered behaviors. | LOW | No runtime `register_behavior()` API |
+| `Behavior` trait with `name()`, `order_key()`, `evaluate()` | The user-facing extension point. Without it, users cannot define rules. | LOW | `name()` must return `&'static str` for deterministic ordering |
 
 ### Differentiators (Competitive Advantage)
 
-These go beyond basic unit tests. They represent the engine-level properties that proptest's shrinking makes practically discoverable — bugs that manual tests miss.
+Features that separate herdingcats from "roll your own command pattern" or a generic FSM crate.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Arbitrary-length undo/redo walk: N dispatches, N undos returns to initial state | Proves correctness holds across any sequence, not just 1 dispatch | MEDIUM | Generate `Vec<BgEvent>` of length 1..20, dispatch all, undo all, assert state == initial. The key property for a game engine. |
-| Undo/redo alternation invariant | `dispatch, undo, redo` repeated N times always converges to same final state | MEDIUM | Proptest generates N, runs the cycle; verifies hash and state are equal each time. |
-| Preview commutes with dispatch | `dispatch_preview(e)` then `dispatch(e)` must produce same state as `dispatch(e)` alone | MEDIUM | Proves preview truly has no side effects — a subtle correctness property. |
-| `RuleLifetime::Triggers` countdown is undoable | After dispatch triggers a rule's lifetime to zero and disables it, undo must restore it to enabled | MEDIUM | The `enabled_snapshot` in `CommitFrame` handles this; test proves it. Critical for rule lifecycle correctness. |
-| `RuleLifetime::Turns` countdown is undoable | Turns-based rules decrement on each dispatch; undo must restore the countdown | MEDIUM | Same mechanism as Triggers. Property: dispatch N times, undo N times, lifetime counter is back to start. |
-| Hash order-dependence: different op sequences produce different hashes | XOR-fold with FNV_PRIME means op order matters; verify two distinct valid move sequences have distinct hashes | LOW | Use Backgammon concrete moves; this catches hash collisions and ordering bugs. |
-| Backgammon board conservation: total checkers never change | 15 checkers per player must be conserved across all moves; no checkers created or destroyed | MEDIUM | Domain invariant enforced by proptest over arbitrary legal move sequences. Catches off-by-one errors in move ops. |
-| Backgammon: dice values constrain legal moves | After rolling dice (d1, d2), the moves applied must use exactly those pip values | HIGH | Requires generating dice + board state together, then generating only moves consistent with those dice. `prop_compose` needed. |
-| Partial move undo: use one die, undo it, see original board | Models the real gameplay flow: roll dice, move one checker, reconsider, undo that checker | MEDIUM | Generates die value, move op, applies it, undos it, asserts board restored. Core non-determinism test case. |
-| State machine transition fuzz: arbitrary event sequences do not panic | Dispatch arbitrary events including illegal ones (cancelled transactions); engine must never panic or corrupt state | MEDIUM | Use `proptest-state-machine` `StateMachineTest` with `preconditions` to exclude illegal states, or just feed all events and check panic-freedom + conservation invariants. |
+| Irreversibility boundary designation | Game domains have points of no return (dice revealed, hidden info made public). No existing general-purpose library handles this cleanly. The library user designates; the engine erases undo/redo history across that boundary. | LOW | Single policy for MVP: erase on irreversible commit |
+| Diff-as-record (diffs stored in frame, not just applied) | Replay, network sync, and debugging all benefit from having the mutation log as first-class data. Most roll-your-own command patterns apply-and-discard. herdingcats stores diffs in the Frame. | MEDIUM | Enables time-travel debugging, deterministic replay from any checkpoint |
+| `EngineError` distinct from domain outcomes | Most libraries conflate "engine bug" with "invalid input". herdingcats surfaces the distinction explicitly, enabling library users to handle them differently in production. | LOW | `Result<Outcome, EngineError>` — the `Err` variant means the library malfunctioned |
+| Later behaviors see earlier diffs (live working state) | The "higher-priority behavior fires first and changes state that lower-priority behavior then observes" pattern is the core reason ordered behaviors exist. Generic event systems don't provide this. | MEDIUM | Requires immediate diff application during dispatch loop, not deferred |
+| Trace ordering guaranteed to match execution | UI frameworks that react to trace entries depend on ordering. Reconstructed-after-the-fact traces can be wrong when side effects are interleaved. | LOW | Enforced by generating trace at diff-apply moment |
+| Zero runtime dependencies | Embeddable in any Rust project, including WASM targets, server-side AI workers, embedded systems. Competing options (Bevy, boardgame.io) pull in large dependency trees. | LOW | Already established by PROJECT.md constraints |
+| Tic-tac-toe + Backgammon examples | Two examples spanning trivial-to-moderate complexity. Backgammon specifically exercises irreversibility (dice roll) and multiple legal move generation. Shows the library is usable on real games, not just toy cases. | MEDIUM | Both are placeholder files; need full implementation |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### Anti-Features (Deliberately NOT in v0.5.0)
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Testing rule hook ordering via mutable global state | Seems like a straightforward way to record execution order across rules | Global mutable state in tests is non-deterministic under proptest's parallel execution; causes flaky tests | Return execution log as part of the transaction or use a dedicated test-only rule that appends to a `Vec` held in the game state |
-| Property tests on the full backgammon legal move generator | Tempting to test the game logic exhaustively at this layer | This is integration/game testing, not engine testing; backgammon legal move generation is complex and belongs in the game layer, not the engine layer tests | Test board conservation and dice-constraint properties instead; let the game layer own legality |
-| Testing `write()` preserves semantic state meaning | `write()` is explicitly a reset — it clears undo/redo stacks and resets hash | Testing that write "correctly" sets state conflates the engine with game-level semantics | Unit test only: assert that after `write(snapshot)`, undo is no-op, redo is no-op, hash is FNV_OFFSET |
-| Concurrent/parallel dispatch testing | Sounds thorough | The engine is single-threaded by design (`Engine` is not `Send + Sync`); concurrent testing adds no value and may require unsafe workarounds | If concurrency is ever needed, that is a new design milestone, not a test task |
-| Testing the FNV-1a hash function itself | Developers sometimes unit test the primitive for completeness | FNV-1a is a public-domain algorithm with published test vectors; reinventing those tests adds noise | Use one known-value test per module as a smoke check; the real value is in testing the engine's use of the hash, not the hash itself |
-| `dispatch_preview` property tests with side-effecting rules | Seems like a natural extension to test | If a rule's `before`/`after` hooks have external side effects (IO, global state), preview cannot truly be side-effect-free — that is a game-layer problem, not an engine problem | Document that `dispatch_preview` only undoes engine-internal state; rules are responsible for not having external side effects |
+Features that seem useful but are excluded with intention.
+
+| Feature | Why Requested | Why Problematic for v0.5.0 | Alternative |
+|---------|---------------|----------------------------|-------------|
+| `NeedsChoice` outcome / interactive branching | Many games require mid-dispatch player input (target selection, mulligan decisions). Users will ask for it. | Fundamentally changes the dispatch contract. Requires suspending and resuming dispatch state, interaction with async or callback models, and deeper design work. Not solvable cleanly at the library level without understanding concrete use cases first. | Defer to v0.6.0+. Model as a sequence of inputs: dispatch returns `Disallowed` or a domain signal, caller queries what choices are available, caller dispatches a `ChooseOption` input. |
+| Runtime behavior registration | Mod systems, dynamically loaded content, scripting layers all seem to want this. | Destroys type safety and determinism guarantees. The library's ordering contract is only enforceable over a statically known set. Also prevents future DSL compilation path. | Static behaviors composed at engine construction time. Scripted behaviors are a future concern, likely via DSL. |
+| Dynamic substates / dynamic dispatch as design center | ECS-style component lookup at runtime is familiar from Bevy. | Adds indirection that undermines the compile-time guarantees the library provides. `dyn Behavior` boxes everywhere would break zero-overhead and complicate the CoW granularity story. | User defines substates statically in their `State` struct. Library provides guidance but no forced layout. |
+| Autonomous turn advancement / real-time scheduling | Games with "AI thinking" phases or timers appear to need engine-driven progression. | Fundamentally changes the engine model. herdingcats is input-driven by design. Autonomous advancement requires threading, async runtimes, or timer infrastructure — none of which belong in a zero-dependency library. | Caller drives the loop. AI thinks, then calls `dispatch`. External timer fires, caller calls `dispatch(TimerExpired)`. |
+| Separate global validation pass before behavior evaluation | Early-return validation seems like a performance optimization. | Circumvents priority-based resolution. A high-priority behavior might transform input into something valid that a naive pre-check would reject. The architecture explicitly forbids this. | Validation happens naturally in ordered behavior evaluation. First behavior to return `Stop(InvalidInput(...))` short-circuits dispatch. |
+| Built-in phase/turn management (like boardgame.io phases) | boardgame.io's phase system is convenient for typical board games. | Opinionated turn structure would conflict with games that don't fit the mold (e.g., simultaneous resolution, action points, reaction windows). herdingcats models turn structure as domain state and behaviors, not engine primitives. | Users model `CurrentPhase`, `ActivePlayer`, etc. in their `State`. Behaviors enforce phase-appropriate rules by inspecting state. |
+| Multiplayer / network sync | Users building multiplayer games will want built-in sync. | Out of scope for a pure rules engine. The deterministic input-log model (dispatch from same inputs produces same state) is what enables network sync — but the transport is the caller's problem. | Determinism guarantee is the foundation. Caller records inputs, replicates input log to all peers, each peer dispatches identically. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Operation round-trip unit test]
-    └──required by──> [Undo restores state identity]
-                          └──required by──> [Arbitrary-length undo/redo walk]
-                          └──required by──> [Undo/redo alternation invariant]
-                          └──required by──> [Triggers/Turns lifetime undo]
+dispatch(input)
+    └──requires──> Behavior trait (name, order_key, evaluate)
+    └──requires──> BehaviorResult<D, O> (Continue / Stop)
+    └──requires──> CoW working state
+    └──requires──> Diff application (immediate, ordered)
+    └──requires──> Trace generation (at diff-apply time)
+    └──requires──> Frame construction (input + diff + trace)
+    └──requires──> Outcome enum (Committed, NoChange, InvalidInput, Disallowed, Aborted)
 
-[Hash determinism unit test]
-    └──required by──> [Undo/redo replay hash round-trip]
-                          └──required by──> [Hash order-dependence test]
+undo()
+    └──requires──> Frame (stored in undo stack)
+    └──requires──> dispatch() (undo stack only populated by dispatch)
+    └──enhances──> Irreversibility boundary (determines what can be undone)
 
-[Cancelled transaction test]
-    └──required by──> [Non-reversible tx clears redo stack]
+redo()
+    └──requires──> undo() (redo stack populated by undo)
 
-[dispatch_preview zero side effects]
-    └──required by──> [Preview commutes with dispatch]
+Irreversibility boundary
+    └──requires──> undo/redo stacks (to erase)
+    └──requires──> Frame (to identify boundary frames)
 
-[Backgammon board setup (State + Op + Event types)]
-    └──required by──> [Board conservation invariant]
-    └──required by──> [Dice-constraint move generation]
-                          └──required by──> [Partial move undo]
-    └──required by──> [State machine transition fuzz]
+Trace
+    └──requires──> Diff application (trace entries generated at apply time)
+    └──enhances──> Frame (frame carries trace for replay/debugging)
+
+CoW working state
+    └──requires──> Static substate layout (CoW granularity is per-substate)
+    └──conflicts──> Dynamic substates (CoW with dynamic dispatch makes granularity undefined)
+
+Static behavior set
+    └──conflicts──> Runtime behavior registration
+    └──enables──> Deterministic (order_key, behavior_name) ordering
 ```
 
 ### Dependency Notes
 
-- **Operation round-trip is the foundation:** Every undo-correctness property depends on `apply` and `undo` being inverses. This must be tested first; if it fails, all higher-level undo tests fail for the wrong reason.
-- **Hash unit test enables hash round-trip:** The replay hash properties (undo restores hash, redo restores hash) are not testable without first confirming the hash accumulation logic is correct.
-- **Backgammon types must exist before backgammon property tests:** The example game (`examples/backgammon.rs`) must compile and expose `proptest`-derivable strategies before any game-specific properties can run. This is a hard sequential dependency.
-- **Dice-constraint depends on board state strategy:** To test that moves respect dice values, you need a strategy that generates `(board_state, dice_roll)` jointly — the `prop_compose` flat_map pattern. The board state strategy must come first.
+- **dispatch requires Behavior trait**: The trait is the user's only extension point. Without it there is no dispatch loop.
+- **undo requires dispatch**: The undo stack only has content after successful dispatches. Both must be designed together.
+- **CoW conflicts with dynamic substates**: CoW granularity is defined by the static substate layout. A dynamic layout would require either full-clone fallback (defeating the purpose) or runtime reflection (adding complexity).
+- **Static behavior set enables deterministic ordering**: The `(order_key, behavior_name)` tiebreaker only works if `behavior_name` is stable at compile time. Runtime-registered behaviors would need runtime name assignment, which could be non-deterministic.
+- **Trace requires diff application to be immediate**: If diffs were batched and applied at end of dispatch, trace entries could not be generated in real execution order. Immediate application is a hard architectural dependency of correct trace ordering.
 
 ---
 
 ## MVP Definition
 
-### Launch With (v1 — this milestone)
+### Launch With (v0.5.0)
 
-Minimum set to make the claim "determinism and undo/redo correctness are machine-verified" credible.
+Minimum viable product — what a user needs to build tic-tac-toe and backgammon with this library.
 
-- [ ] Operation round-trip property test (per-module, inline `#[cfg(test)]`) — proves the `Operation<S>` contract
-- [ ] Hash determinism property test — proves FNV-1a accumulation is pure
-- [ ] Undo restores state identity property test — the core engine guarantee
-- [ ] Undo/redo replay hash round-trip property test — proves hash tracks state correctly
-- [ ] `dispatch_preview` zero side effects unit test — proves preview is safe to call freely
-- [ ] Cancelled transaction leaves state unchanged unit test — proves cancellation is clean
-- [ ] `RuleLifetime::Triggers` undo correctness test — proves lifecycle is reversible
-- [ ] `RuleLifetime::Turns` undo correctness test — proves lifecycle is reversible
-- [ ] Arbitrary-length undo/redo walk (proptest, N dispatches then N undos) using Backgammon — the headline property test
-- [ ] Backgammon board conservation invariant (proptest) — domain-level property
-- [ ] Partial move undo with one die (proptest) — exercises the non-determinism use case
+- [ ] `Behavior` trait with `name() -> &'static str`, `order_key() -> K`, `evaluate(&I, &S) -> BehaviorResult<D, O>` — the user's extension point
+- [ ] `BehaviorResult<D, O>` enum: `Continue(Vec<D>)` and `Stop(O)` — the behavior contract
+- [ ] `Outcome<F, N>` enum: `Committed(F)`, `Undone(F)`, `Redone(F)`, `NoChange`, `InvalidInput(N)`, `Disallowed(N)`, `Aborted(N)` — full result surface
+- [ ] `EngineError` type distinguishing engine malfunction from domain outcomes
+- [ ] `Frame<I, D, T>` struct: `input`, `diff`, `trace` — canonical transition record
+- [ ] `dispatch(input) -> Result<Outcome, EngineError>` — atomic, ordered, immediate-diff, trace-generating
+- [ ] CoW working state — no eager full-state clone on dispatch
+- [ ] `undo() -> Result<Outcome, EngineError>` — with `Undone(frame)` and `Disallowed` variants
+- [ ] `redo() -> Result<Outcome, EngineError>` — with `Redone(frame)` and `Disallowed` variants
+- [ ] Irreversibility boundary: user-designated, erases undo/redo history on commit
+- [ ] Tic-tac-toe example — full API demonstration, minimal state
+- [ ] Backgammon example — full API demonstration, exercises dice roll irreversibility
 
-### Add After Validation (v1.x)
+### Add After Validation (v0.5.x)
 
-These add confidence but are not needed to establish core correctness.
+Features to add once the core is validated with real game implementations.
 
-- [ ] Undo/redo alternation invariant (dispatch, undo, redo repeated N times) — add when undo walk is green
-- [ ] Preview commutes with dispatch property — add after preview side-effect test is green
-- [ ] State machine transition fuzz with `proptest-state-machine` — add if edge cases surface from the walk tests
-- [ ] Hash order-dependence test — add once board conservation and move generation are stable
+- [ ] `NeedsChoice` outcome — add when a concrete use case (e.g., backgammon bearing-off target selection, card game targeting) proves the dispatch-suspend model is needed
+- [ ] History access API (`engine.history()` or frame iterator) — add when replay or time-travel debugging is requested by users
+- [ ] Derive macros or helper traits for common Diff patterns — add when users report boilerplate fatigue writing diff enums
 
-### Future Consideration (v2+)
+### Future Consideration (v0.6.0+)
 
-- [ ] Concurrent dispatch safety — only if `Engine` ever becomes `Send`; out of scope for this library's design
-- [ ] Exhaustive backgammon legality testing — belongs in a separate game-layer test suite, not the engine
+Features to defer until the library has real-world usage data.
+
+- [ ] DSL / card-text compilation — long-term direction per PROJECT.md; requires mature behavior model and real game experience
+- [ ] Multiplayer/network sync helpers — determinism is already there; transport layer is user concern until a concrete pattern emerges
+- [ ] Runtime behavior registration — only if a scripting or mod use case proves it necessary; would require new design work to preserve ordering guarantees
 
 ---
 
 ## Feature Prioritization Matrix
 
-| Feature | Value to Engine Correctness | Implementation Cost | Priority |
-|---------|--------------------------|---------------------|----------|
-| Operation round-trip | HIGH | LOW | P1 |
-| Hash determinism | HIGH | LOW | P1 |
-| Undo restores state | HIGH | LOW | P1 |
-| Undo/redo hash round-trip | HIGH | LOW | P1 |
-| dispatch_preview side effects | HIGH | LOW | P1 |
-| Cancelled tx unchanged | HIGH | LOW | P1 |
-| Triggers/Turns undo | HIGH | MEDIUM | P1 |
-| Arbitrary-length undo/redo walk | HIGH | MEDIUM | P1 |
-| Backgammon board conservation | HIGH | MEDIUM | P1 |
-| Partial move undo | HIGH | MEDIUM | P1 |
-| Undo/redo alternation invariant | MEDIUM | MEDIUM | P2 |
-| Preview commutes with dispatch | MEDIUM | MEDIUM | P2 |
-| State machine transition fuzz | MEDIUM | HIGH | P2 |
-| Hash order-dependence | LOW | LOW | P2 |
-| Exhaustive legality testing | LOW | HIGH | P3 |
-| Concurrent dispatch safety | LOW | HIGH | P3 |
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| `dispatch` + `Behavior` trait + `BehaviorResult` | HIGH | MEDIUM | P1 |
+| `Outcome` enum + `EngineError` | HIGH | LOW | P1 |
+| `Frame<I, D, T>` | HIGH | LOW | P1 |
+| CoW working state | HIGH | HIGH | P1 |
+| Ordered behavior evaluation (immediate diff apply) | HIGH | MEDIUM | P1 |
+| Trace generation synchronized with dispatch | HIGH | MEDIUM | P1 |
+| `undo()` / `redo()` | HIGH | MEDIUM | P1 |
+| Irreversibility boundary | MEDIUM | LOW | P1 |
+| Tic-tac-toe example | MEDIUM | LOW | P1 |
+| Backgammon example | HIGH | MEDIUM | P1 |
+| History/replay access API | MEDIUM | LOW | P2 |
+| `NeedsChoice` outcome | MEDIUM | HIGH | P2 |
+| Derive macros for Diff | LOW | MEDIUM | P3 |
+| DSL compilation | HIGH | HIGH | P3 |
 
 **Priority key:**
-- P1: Must have for this milestone — engine correctness claims require these
-- P2: Should have — adds depth but not foundational
-- P3: Defer — out of scope or belongs to a different layer
+- P1: Must have for v0.5.0 launch
+- P2: Should have, add after validation
+- P3: Future consideration
 
 ---
 
-## Implementation Notes by Test Category
+## Competitor Feature Analysis
 
-### proptest Strategy Patterns Needed
-
-**For engine unit properties (Operations, hash):**
-Use `proptest! { #[test] fn ... }` with `any::<T>()` or explicit ranges. No special strategy infrastructure needed. These are the simplest tests.
-
-**For undo/redo walk (arbitrary event sequences):**
-Use `prop::collection::vec(backgammon_event_strategy(), 1..20)` to generate a sequence of events. Apply all, undo all. The `prop_compose!` macro builds `backgammon_event_strategy()` from dice ranges and point indices.
-
-```rust
-prop_compose! {
-    fn arb_dice()(d1 in 1u8..=6, d2 in 1u8..=6) -> (u8, u8) { (d1, d2) }
-}
-prop_compose! {
-    fn arb_point()(p in 0usize..24) -> usize { p }
-}
-```
-
-**For board conservation and dice-constrained moves:**
-Requires generating `(board_state, dice_roll)` jointly via `prop_flat_map` — one value constrains the next. This is the `vec_and_index` pattern from the proptest book applied to game state.
-
-**For state machine fuzzing (optional v1.x):**
-`proptest-state-machine` crate (`proptest-state-machine = "0.3"` in `[dev-dependencies]`). Implement `ReferenceStateMachine` as a simple model (just undo stack depth, checker counts) and `StateMachineTest` as the real `Engine`. Use `prop_state_machine!` macro. Strongest for finding minimal failing sequences via shrinking.
-
-### What Makes Backgammon the Right Test Game
-
-Backgammon stresses the engine in ways tic-tac-toe cannot:
-
-1. **Non-determinism:** Dice rolls are part of the event. `Engine` is deterministic; the dice are external entropy. Tests must model this correctly — generate dice as part of test input, not inside rules.
-2. **Partial moves:** A player rolls (3, 5) and wants to move one checker 3 pips then reconsider. This is undo in the middle of a "turn" — the engine sees two separate dispatchable events within one logical turn.
-3. **Board complexity:** 24 points + bar + home per player gives enough state space that conservation invariants are non-trivial to accidentally satisfy.
-4. **Doubles:** Rolling doubles gives 4 moves of the same value, not 2 — the event carries `(d1, d2)` and the number of usable moves changes. This stresses any move-generation strategy.
-
-### Scope Boundary: Engine vs Game Layer
-
-Tests **in `src/`** (inline `#[cfg(test)]`): engine mechanics — operation contracts, hash, undo/redo stack behavior, lifetime lifecycle, preview isolation.
-
-Tests **in `examples/backgammon.rs`** or a `tests/` integration file: domain properties — board conservation, dice constraint, partial move undo. These use the engine as a black box via its public API.
-
-Do NOT mix: engine module tests should not import `backgammon` types. Backgammon tests should not reach into engine internals.
+| Feature | boardgame.io (JS) | Asmodee Rules Engine | herdingcats v0.5.0 |
+|---------|------------------|---------------------|-------------------|
+| Core dispatch model | Moves as pure functions `(G, ctx) -> G` | Input validation + state transition | Ordered behaviors, immediate diffs, atomic commit |
+| Behavior ordering | Implicit (move order, phase priority) | Not exposed directly | Explicit `(order_key, behavior_name)`, user-controlled |
+| Undo/redo | Via game log time-travel; limited native undo | Not documented | Native `undo()`/`redo()`, undo stack with irreversibility |
+| Trace/log | Game log as first-class feature | Event sourcing for replay | Trace generated at diff-apply time, stored in Frame |
+| Phase management | Built-in phase system, turn order, stage system | Not documented | Anti-feature: modeled in user state |
+| Multiplayer | Built-in server sync | Client/server model | Out of scope; determinism enables it |
+| Runtime behavior registration | Yes (move definitions) | Not applicable | Anti-feature: static only |
+| Type safety | JavaScript (runtime) | Not Rust | Rust, compile-time, zero dynamic dispatch |
+| Dependencies | Large (React, server, etc.) | Unknown | Zero runtime dependencies |
+| Speculative/preview dispatch | No native support | Unknown | CoW working state supports cheap speculation |
 
 ---
 
 ## Sources
 
-- [Proptest State Machine Testing — Official Proptest Book](https://proptest-rs.github.io/proptest/proptest/state-machine.html) — HIGH confidence, official docs
-- [proptest-state-machine crate — crates.io](https://crates.io/crates/proptest-state-machine) — HIGH confidence
-- [proptest docs.rs — Strategy trait and prop_compose](https://docs.rs/proptest/latest/proptest/) — HIGH confidence, official docs
-- [Model-Based Stateful Testing with proptest-state-machine — Nikos Baxevanis (2025)](https://blog.nikosbaxevanis.com/2025/01/10/state-machine-testing-proptest/) — MEDIUM confidence, verified practitioner post
-- [State Machine Properties — propertesting.com](https://propertesting.com/book_state_machine_properties.html) — MEDIUM confidence, community reference
-- [Higher-Order Strategies — Proptest Book](https://altsysrq.github.io/proptest-book/proptest/tutorial/higher-order.html) — HIGH confidence, official docs (prop_compose / flat_map patterns)
-- [Exploring Round-trip Properties in Property-based Testing — PLClub (2023)](https://www.cis.upenn.edu/~plclub/blog/2023-12-07-round-trip-properties/) — MEDIUM confidence, academic source
+- [boardgame.io documentation](https://boardgame.io/documentation/) — phases, events, turn order, game log features
+- [boardgame.io GitHub: undo/redo issue #95](https://github.com/boardgameio/boardgame.io/issues/95) — community evidence that undo is expected
+- [Asmodee Rules Engine Architecture](https://doc.asmodee.net/rules-engine) — input validation, event sourcing, data encapsulation patterns
+- [Making a turn-based multiplayer game in Rust (herluf-ba)](https://herluf-ba.github.io/making-a-turn-based-multiplayer-game-in-rust-01-whats-a-turn-based-game-anyway.html) — reducer pattern, validate-then-apply
+- [Architecture discussion: Card game rules engine in Rust](https://users.rust-lang.org/t/architecture-discussion-writing-a-card-game-rules-engine-in-rust/41569) — effect objects over direct mutation
+- [Game Programming Patterns: Command](https://gameprogrammingpatterns.com/command.html) — command pattern for undo/redo
+- [Are we game yet? Rust ecosystem](https://arewegameyet.rs/) — Rust game development library landscape
+- herdingcats ARCHITECTURE.md — authoritative for v0.5.0 scope and constraints
+- herdingcats PROJECT.md — validated requirements, active requirements, out-of-scope items
 
 ---
-*Feature research for: herdingcats proptest milestone*
-*Researched: 2026-03-08*
+*Feature research for: deterministic turn-based game engine library (Rust)*
+*Researched: 2026-03-13*

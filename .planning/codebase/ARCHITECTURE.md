@@ -1,135 +1,229 @@
 # Architecture
 
-**Analysis Date:** 2026-03-08
+**Analysis Date:** 2026-03-13
 
 ## Pattern Overview
 
-**Overall:** Generic, trait-driven rule orchestration engine (library crate)
+**Overall:** Deterministic input-driven state transition engine
 
 **Key Characteristics:**
-- Single-file library (`src/lib.rs`) exposing a set of generic types and traits
-- Fully parameterized over four type variables: game state `S`, operation `O`, event `E`, priority `P`
-- No framework dependencies — zero external crates; pure Rust standard library
-- Strict determinism invariant: all state mutation flows through `Operation`, never bypassed
-- Consumer (game) code lives entirely outside the library (e.g., `examples/`)
+- Input-driven: Engine never advances without explicit input or undo/redo call
+- Deterministic: Behaviors execute in stable `(order_key, name)` order
+- Atomic: Dispatch either commits fully or no state changes become visible
+- Ordered behavior resolution: Statically known set of behaviors checked sequentially
+- Immediate diff application: Each applied diff mutates working state immediately
+- Centralized mutation: Engine owns all state mutations, behaviors emit diffs only
 
 ## Layers
 
+**Library API:**
+- Purpose: Provides engine dispatch, undo/redo, and outcome construction
+- Location: `src/lib.rs` (skeleton - to be implemented)
+- Contains: Public traits and types for behavior, state, input, diff, trace definitions
+- Depends on: Core engine implementation
+- Used by: Game implementations (examples, external crates)
+
 **Engine Core:**
-- Purpose: Orchestrates rule execution, manages undo/redo stacks, hashing, and rule lifetimes
-- Location: `src/lib.rs` — `Engine<S, O, E, P>` struct
-- Contains: `Engine`, `CommitFrame`, `Transaction`, `RuleLifetime`, `fnv1a_hash`
-- Depends on: `Operation` trait, `Rule` trait (via dynamic dispatch `Box<dyn Rule>`)
-- Used by: Consumer game code (the library user)
+- Purpose: Orchestrates behavior ordering, diff application, working state management, history tracking
+- Location: To be implemented in `src/engine.rs` or module
+- Contains: Dispatch algorithm, working state construction, history management, undo/redo logic
+- Depends on: Behavior trait, input/output types
+- Used by: Public API
 
-**Operation Abstraction:**
-- Purpose: Represents a single, reversible, hashable state mutation
-- Location: `src/lib.rs` — `Operation<S>` trait
-- Contains: `apply()`, `undo()`, `hash_bytes()` contract
-- Depends on: Game state type `S`
-- Used by: `Transaction`, `Engine` dispatch/undo/redo, `CommitFrame`
+**Behavior Evaluation:**
+- Purpose: Executes individual behaviors and produces diffs
+- Location: Statically composed at compile-time in user code
+- Contains: User-defined behavior implementations satisfying the Behavior trait
+- Depends on: Input, State, Diff types
+- Used by: Engine during dispatch
 
-**Rule Abstraction:**
-- Purpose: Encapsulates game logic that responds to events before and after state mutations
-- Location: `src/lib.rs` — `Rule<S, O, E, P>` trait
-- Contains: `id()`, `priority()`, optional `before()`, optional `after()` hooks
-- Depends on: `Operation<S>`, game state `S`, event type `E`, priority type `P`
-- Used by: `Engine` (stored as `Vec<Box<dyn Rule<S, O, E, P>>>`)
-
-**Transaction:**
-- Purpose: Batches a sequence of operations for atomic application or cancellation
-- Location: `src/lib.rs` — `Transaction<O>` struct
-- Contains: `ops: Vec<O>`, `irreversible: bool`, `deterministic: bool`, `cancelled: bool`
-- Depends on: Operation type `O`
-- Used by: `Engine::dispatch()`, `Engine::dispatch_preview()`, all Rule hooks
-
-**Consumer Game Code (examples):**
-- Purpose: Implements game-specific state, operations, events, rules, and entry point
-- Location: `examples/tictactoe.rs`
-- Contains: Game state structs, `Op` enum implementing `Operation`, `GameEvent` enum, `Rule` impls, `main()`
-- Depends on: `herdingcats::*` (Engine, Operation, Rule, Transaction, RuleLifetime)
-- Used by: Cargo example runner (`cargo run --example tictactoe`)
+**User State Composition:**
+- Purpose: Defines domain state, behavior state, diffs, and traces for the specific game
+- Location: User code (e.g., `examples/` implementations)
+- Contains: State struct, DomainState, BehaviorState, StateDiff, and Trace types
+- Depends on: Nothing from the engine
+- Used by: Engine via generic parameters
 
 ## Data Flow
 
-**Commit Dispatch (`Engine::dispatch`):**
+**Forward Dispatch:**
 
-1. Caller constructs a `Transaction<O>` and an event value `E`
-2. `Engine::dispatch()` iterates rules in priority order (low → high), calling `rule.before(state, event, tx)` for each enabled rule
-3. Each `before` hook may push `Operation` values onto `tx.ops` or set `tx.cancelled = true`
-4. If `tx.cancelled` is false, engine applies all ops via `op.apply(&mut state)` in order
-5. Engine iterates rules in reverse priority order (high → low), calling `rule.after(state, event, tx)` for each enabled rule
-6. `after` hooks may push additional operations (e.g., win detection appending `SetWinner`)
-7. Turn-based (`RuleLifetime::Turns`) lifetimes are decremented; exhausted rules are disabled
-8. If `tx.irreversible` and not cancelled: each op's `hash_bytes()` is FNV-1a hashed into `replay_hash`; a `CommitFrame` is pushed onto `undo_stack`; `redo_stack` is cleared
+1. Caller submits `Input` to `engine.dispatch(input, state)`
+2. Engine creates speculative **working state** from current committed state
+3. Engine orders all behaviors by `(order_key, behavior_name)`
+4. For each behavior in order:
+   1. Call `behavior.evaluate(input, &working_state)` → `BehaviorResult<D, O>`
+   2. If `Stop(outcome)`, halt immediately and discard working state, return non-committed outcome
+   3. If `Continue(diffs)`, apply each diff sequentially:
+      - Mutate working state through diff's `apply` method
+      - Append trace entries at the same moment diff is applied
+5. After all behaviors processed:
+   - If no diffs were applied, return `NoChange` (non-committed)
+   - Otherwise accumulate all applied diffs into a collection
+6. Construct `Frame { input, diffs, trace }`
+7. Commit atomically: Update internal state pointer and append frame to history
+8. Return `Committed(frame)`
 
-**Preview Dispatch (`Engine::dispatch_preview`):**
+**State Management:**
 
-1. Full snapshots taken: state, lifetimes, enabled set, replay hash
-2. Same before/apply/after pipeline runs as in commit dispatch
-3. All snapshots restored — no commit frame pushed, no hash update, no lifetime decrement
+- **Committed state**: The last successfully committed full state
+- **Working state**: Copy-on-write speculative state created fresh for each dispatch
+  - Reads from committed state until first write to a substate
+  - Clone substates only when first written
+  - Granularity is user-defined (coarse or fine-grained substates)
+  - Later behaviors see changes from earlier applied diffs
+  - If dispatch fails, discarded entirely
 
 **Undo/Redo:**
 
-1. `undo()` pops from `undo_stack`, applies ops in reverse order via `op.undo()`, restores replay hash, lifetimes, and enabled set from `CommitFrame`
-2. `redo()` pops from `redo_stack`, re-applies ops forward, restores hash/lifetimes/enabled from frame
+- Undo: Move undo pointer backward one frame
+  - Revert committed state to previous frame's pre-transition state
+  - Pop current frame from redo stack
+  - Return `Undone(frame)` with the frame being unwound
+  - Irreversible boundaries erase undo/redo history across them
 
-**State Management:**
-- State `S` is owned by `Engine::state` (public field, direct access)
-- `Engine::read()` returns a clone; `Engine::write(snapshot)` replaces state and clears all history
+- Redo: Move redo pointer forward one frame
+  - Replay the frame's diffs onto current state
+  - Return `Redone(frame)`
+  - Only valid if a frame was previously undone
 
 ## Key Abstractions
 
-**`Operation<S>` trait:**
-- Purpose: Atomic, reversible, hashable state mutation unit
-- Examples: `Op::Place`, `Op::SetWinner`, `Op::SwitchTurn` in `examples/tictactoe.rs`
-- Pattern: Enum with variants per mutation type; each variant implements `apply`, `undo`, `hash_bytes`
+**Behavior:**
+- Purpose: Statically known, compile-time-defined participant in resolution
+- Examples: Movement validation, attack resolution, end-turn cleanup
+- Pattern: Trait with `name()`, `order_key()`, `evaluate(input, state)` methods
+- Evaluation: Takes `&Input` and `&State`, returns `BehaviorResult<Diff, Outcome>`
+- Order: Behaviors within same order_key sort alphabetically by name
+- State: Behavior-local state lives inside main `State` (not hidden in engine)
 
-**`Rule<S, O, E, P>` trait:**
-- Purpose: Stateless or stateful game logic responding to events
-- Examples: `PlayRule`, `WinRule` in `examples/tictactoe.rs`
-- Pattern: Zero-size or data-carrying structs; override only relevant hooks (`before` or `after`)
+**Diff (State Mutation):**
+- Purpose: User-defined description of a state mutation
+- Pattern: Enum that mirrors state structure (e.g., `enum StateDiff { Domain(...), Behaviors(...) }`)
+- Application: Each diff type implements an `apply(&mut state, &mut trace)` method
+- Timing: Applied immediately during dispatch, never reconstructed later
+- Coupling: Any diff that mutates state must append at least one trace entry
 
-**`Transaction<O>`:**
-- Purpose: Mutable bag of ops passed through the rule pipeline; supports cancellation
-- Pattern: Created empty by caller (`Transaction::new()`), populated by `before` hooks, consumed by engine
+**Trace (Execution Record):**
+- Purpose: Record of why state changed, for UI and replay
+- Pattern: Accumulator built during dispatch, appended to as each diff applies
+- Content: User-defined events/entries describing state changes
+- Timing: Generated in execution order at the exact moment diffs apply
+- Scope: Only produced on successful committed transitions
 
-**`RuleLifetime`:**
-- Purpose: Controls how long a rule stays active: forever, N turns, or N triggers
-- Pattern: Enum (`Permanent`, `Turns(u32)`, `Triggers(u32)`); stored and restored in commit frames
+**Frame (Transition Record):**
+- Purpose: Canonical record of successful atomic transition
+- Structure: `Frame { input: Input, diffs: DiffCollection, trace: Trace }`
+- Persistence: Stored in history for undo/redo and replay
+- Atomicity: Entire frame commits or nothing commits
+- Immutability: Never modified after creation
 
-**`CommitFrame<S, O>`:**
-- Purpose: Full snapshot of engine metadata at commit time; enables precise undo
-- Pattern: Internal struct stored on `undo_stack`; holds tx, hashes before/after, lifetime and enabled snapshots
+**Outcome (Operation Result):**
+- Purpose: Distinguish successful committed transitions from rejected/aborted attempts
+- Variants:
+  - `Committed(frame)`: Successful non-empty transition committed
+  - `Undone(frame)`: Frame was undone (frame is the one being unwound)
+  - `Redone(frame)`: Frame was redone (frame is the one being replayed)
+  - `NoChange`: Dispatch completed with no state mutation
+  - `InvalidInput(...)`: Input doesn't make sense in current context
+  - `Disallowed(...)`: Input is meaningful but a behavior forbids it
+  - `Aborted(...)`: Dispatch began but diff application or resolution couldn't safely proceed
+
+**EngineError (Non-Domain Failure):**
+- Purpose: Distinguish genuine engine/library failures from normal domain outcomes
+- Usage: For impossible internal state, malformed configuration, or panic-like conditions
+- Scope: Not part of normal dispatch semantics; indicates implementation bug
 
 ## Entry Points
 
-**Library Public API:**
-- Location: `src/lib.rs`
-- Triggers: Consumed by downstream Rust crates via `use herdingcats::*`
-- Responsibilities: Exposes `Engine`, `Transaction`, `RuleLifetime`, `Operation` trait, `Rule` trait
+**dispatch(input):**
+- Location: Engine public API (to be `src/lib.rs` or public module)
+- Triggers: Called by game/application layer with a user-defined `Input`
+- Responsibilities:
+  1. Create working state from committed state
+  2. Order and evaluate all behaviors sequentially
+  3. Apply diffs and trace immediately
+  4. Commit atomically if non-empty
+  5. Return `Result<Outcome, EngineError>`
 
-**Example Binary (`tictactoe`):**
-- Location: `examples/tictactoe.rs` — `fn main()`
-- Triggers: `cargo run --example tictactoe`
-- Responsibilities: Constructs `Engine`, registers rules, drives the game loop, prints board state
+**undo():**
+- Location: Engine public API
+- Triggers: Called explicitly by caller to undo last committed transition
+- Responsibilities:
+  1. Check if undo is possible (undo history exists, not blocked by irreversible boundary)
+  2. Revert state to frame being undone
+  3. Move history pointers
+  4. Return `Result<Outcome, EngineError>` with `Undone(frame)`
+
+**redo():**
+- Location: Engine public API
+- Triggers: Called explicitly by caller to redo a frame that was undone
+- Responsibilities:
+  1. Check if redo is possible (redo stack non-empty)
+  2. Replay frame's diffs onto current state
+  3. Move history pointers
+  4. Return `Result<Outcome, EngineError>` with `Redone(frame)`
 
 ## Error Handling
 
-**Strategy:** No `Result`/`Error` types in the engine. Invalid moves are modeled as transaction cancellation.
+**Strategy:** Two-level error model
+
+**Level 1: Outcome (Domain Semantics)**
+- Success: `Committed`, `Undone`, `Redone`
+- Non-committed: `NoChange`, `InvalidInput`, `Disallowed`, `Aborted`
+- These are normal operation outcomes, never errors
+
+**Level 2: EngineError (Implementation Failures)**
+- Returned as `Result<Outcome, EngineError>`
+- Reserved for impossible internal engine state, bugs, or panic-like conditions
+- Library user should distinguish:
+  - "dispatch was rejected or safely aborted" (Outcome)
+  - "engine malfunctioned" (EngineError)
 
 **Patterns:**
-- Rules set `tx.cancelled = true` in `before` hooks to reject invalid events (e.g., occupied cell, game already over)
-- No panics in engine core; game code may panic (e.g., `unreachable!()` in exhaustive match arms)
-- No error propagation — all logic is pure state transformation
+
+- Validation: Happens during ordered behavior evaluation, not in separate pre-pass
+  - Each behavior inspects working state and returns no diffs if conditions unmet
+  - Later behaviors see updated state and may reach different conclusions
+  - This preserves path-dependent rule application
+
+- Early termination: Behavior returns `Stop(outcome)` to halt dispatch
+  - Remaining behaviors are not evaluated
+  - Working state is discarded
+  - Non-committed outcome is returned
+
+- Controlled failure: Behavior returns `Aborted(context)` to indicate safe failure
+  - Used when diff application cannot safely proceed
+  - Example: Missing entity during controlled state update
+  - Not for engine bugs, only for domain-level safe aborts
 
 ## Cross-Cutting Concerns
 
-**Logging:** None — no logging framework used
-**Validation:** Handled inside `Rule::before()` hooks by inspecting state and cancelling the transaction
-**Authentication:** Not applicable (library crate, no I/O)
-**Determinism:** Enforced architecturally — all mutation through `Operation`, hash updated only on irreversible commit, rule order fixed by priority sort
+**Logging:** Not part of MVP; library user provides logging through trace inspection
+
+**Validation:** Happens during behavior evaluation against working state
+- Path-dependent: Later behaviors see earlier state changes
+- Not pre-validated: No separate validation pass before behavior resolution
+- Inclusive: Invalid inputs return `InvalidInput` outcome; disallowed by rules return `Disallowed`
+
+**Authentication:** Not applicable; this is a game engine library
+
+**State Visibility:**
+- Only committed state is visible to caller
+- Working state is internal and discarded on failure
+- Behavior state lives in main state tree for undo/redo/serialization correctness
+
+**Determinism:**
+- Behavior ordering: `(order_key, behavior_name)` deterministic sort
+- Diff ordering: Within a behavior, diffs applied in returned order
+- Trace ordering: Built in execution order, never reconstructed
+- No random elements in core engine; RNG managed by user through state and diffs
+
+**Atomicity:**
+- Either entire dispatch succeeds and commits, or no visible state changes
+- No partial commits or rollback during failure
+- Working state isolated from committed state until success
 
 ---
 
-*Architecture analysis: 2026-03-08*
+*Architecture analysis: 2026-03-13*
