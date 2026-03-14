@@ -14,6 +14,7 @@
 mod spec;
 mod behavior;
 mod outcome;
+mod apply;
 
 pub use crate::spec::EngineSpec;
 pub use crate::behavior::{Behavior, BehaviorResult};
