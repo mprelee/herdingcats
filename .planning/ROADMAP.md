@@ -17,6 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 3: History** - Implement undo/redo with snapshot strategy and irreversibility boundary
 - [x] **Phase 4: Examples and Tests** - Implement tic-tac-toe and backgammon examples; write unit and property tests (completed 2026-03-14)
 - [x] **Phase 5: Architecture Alignment** - Align codebase with ARCHITECTURE.md: NonCommittedOutcome, Frame shape, EngineSpec bounds, trace contract, docs (completed 2026-03-14)
+- [ ] **Phase 6: Fill Gaps** - Replace Behavior trait with BehaviorDef struct, add trace contract tests, update docs
 
 ## Phase Details
 
@@ -103,10 +104,28 @@ Plans:
 - [ ] 05-02-PLAN.md — Frame shape cleanup + Apply trace doc contract (SC-2, SC-4)
 - [ ] 05-03-PLAN.md — EngineSpec Default removal + README (SC-3, SC-7)
 
+### Phase 6: Fill Gaps
+**Goal**: Replace `Behavior` trait with `BehaviorDef<E>` plain struct (fn pointers), add trace contract tests, and update all docs/examples to match
+**Depends on**: Phase 5
+**Requirements**: GAP-01, GAP-02, GAP-03, GAP-04, GAP-05, GAP-06
+**Success Criteria** (what must be TRUE):
+  1. `Behavior` trait is fully removed — `BehaviorDef<E>` struct with fn pointers is the sole behavior representation
+  2. Engine stores `Vec<BehaviorDef<E>>` sorted by `(order_key, name)` at construction
+  3. Trace contract tests verify: mutating diff returns >= 1 trace, no-op diff may return 0
+  4. Both examples compile and run using `BehaviorDef` construction
+  5. ARCHITECTURE.md and README.md describe `BehaviorDef`, not `Behavior` trait
+  6. `cargo test` passes all tests
+**Plans**: 3 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — Replace Behavior trait with BehaviorDef struct, update engine, add trace contract tests (GAP-01, GAP-02, GAP-03)
+- [ ] 06-02-PLAN.md — Migrate tictactoe and backgammon examples to BehaviorDef (GAP-04)
+- [ ] 06-03-PLAN.md — Update ARCHITECTURE.md and README.md for BehaviorDef (GAP-05, GAP-06)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -115,3 +134,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 3. History | 0/2 | Not started | - |
 | 4. Examples and Tests | 3/3 | Complete    | 2026-03-14 |
 | 5. Architecture Alignment | 3/3 | Complete    | 2026-03-14 |
+| 6. Fill Gaps | 0/3 | Not started | - |
