@@ -23,3 +23,4 @@ pub use crate::behavior::{Behavior, BehaviorResult};
 pub use crate::outcome::{EngineError, Frame, Outcome};
 pub use crate::apply::Apply;
 pub use crate::reversibility::Reversibility;
+pub use crate::engine::Engine;
