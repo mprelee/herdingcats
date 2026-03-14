@@ -78,7 +78,8 @@ Examples of behavior-local state:
 ### Behavior
 A statically known, compile-time-defined participant in resolution.
 
-A behavior is checked during dispatch and can:
+A behavior is represented as a `BehaviorDef` struct containing a `name`, an `order_key`,
+and an `evaluate` fn pointer. It is checked during dispatch and can:
 
 - contribute zero or more diffs
 - or stop evaluation early with a non-committed outcome
@@ -264,7 +265,7 @@ Avoid dynamic substates and avoid dynamic dispatch where possible.
 
 ## Behavior Evaluation Contract
 
-Each behavior is checked for every dispatch.
+Each `BehaviorDef` entry is evaluated for every dispatch via its `evaluate` fn pointer.
 
 A behavior may be effectively “off” by inspecting its own state and returning no diffs.
 
@@ -275,7 +276,7 @@ All behavior-state changes happen through diffs applied to the working state.
 
 ### Behavior return shape
 
-Conceptually:
+Each `BehaviorDef` evaluate call returns:
 
 ```rust
 enum BehaviorResult<D, O> {
@@ -542,7 +543,8 @@ This preserves:
 - easier compiler assistance
 - easier future DSL compilation
 
-Default behaviors may come from `Default`.
+`BehaviorDef` entries are constructed and supplied to the engine at construction time,
+not registered dynamically at runtime.
 Additional behaviors should be supplied during engine construction or through compile-time composition.
 
 Do not design the MVP around runtime behavior registration.
@@ -665,10 +667,10 @@ pub enum BehaviorResult<D, O> {
     Stop(O),
 }
 
-pub trait Behavior<S, I, D, O, K> {
-    fn name(&self) -> &'static str;
-    fn order_key(&self) -> K;
-    fn evaluate(&self, input: &I, state: &S) -> BehaviorResult<D, O>;
+pub struct BehaviorDef<E: EngineSpec> {
+    pub name: &'static str,
+    pub order_key: E::OrderKey,
+    pub evaluate: fn(&E::Input, &E::State) -> BehaviorResult<E::Diff, E::NonCommittedInfo>,
 }
 ```
 
@@ -694,4 +696,4 @@ The engine is not restricted to card games, but this design should make card-tex
 
 ## One-Paragraph Summary
 
-HerdingCats is a deterministic, input-driven, turn-based state engine in which a statically known set of ordered behaviors is checked sequentially during `dispatch`. Each behavior sees only the current speculative working state and either contributes an ordered sequence of diffs or halts evaluation with a non-committed outcome. The engine applies diffs immediately, updates trace at the same moment, and commits a `Frame { input, diff, trace }` only if the entire dispatch succeeds and produces a non-empty state change.
+HerdingCats is a deterministic, input-driven, turn-based state engine in which a statically known set of ordered `BehaviorDef` entries is checked sequentially during `dispatch`. Each entry's `evaluate` fn pointer sees only the current speculative working state and either contributes an ordered sequence of diffs or halts evaluation with a non-committed outcome. The engine applies diffs immediately, updates trace at the same moment, and commits a `Frame { input, diff, trace }` only if the entire dispatch succeeds and produces a non-empty state change.
