@@ -85,4 +85,35 @@ mod tests {
         assert_eq!(state, vec![1u8, 2u8, 3u8]); // state unchanged
         assert!(traces.is_empty());
     }
+
+    // Contract tests: named trace_contract_* to make contract intent explicit and
+    // distinguishable from compilation/behavior tests above.
+
+    #[test]
+    fn trace_contract_mutating_diff_returns_at_least_one_entry() {
+        // A diff that mutates state MUST return at least one trace entry.
+        // This test documents and enforces that contract.
+        let diff = AppendByte(42);
+        let mut state: Vec<u8> = vec![];
+        let traces = diff.apply(&mut state);
+        assert!(
+            !traces.is_empty(),
+            "a mutating Apply::apply call must return at least one trace entry"
+        );
+    }
+
+    #[test]
+    fn trace_contract_noop_diff_may_return_zero_entries() {
+        // A diff that performs no state mutation is permitted to return zero trace entries.
+        // This documents the allowed lower bound for no-op diffs.
+        let diff = NoOpDiff;
+        let mut state: Vec<u8> = vec![1, 2, 3];
+        let traces = diff.apply(&mut state);
+        // State must not have changed (this is a genuine no-op).
+        assert_eq!(state, vec![1u8, 2u8, 3u8]);
+        assert!(
+            traces.is_empty(),
+            "a no-op Apply::apply call may return zero trace entries"
+        );
+    }
 }
