@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 Phase: 1 of 4 (Core Types)
 Plan: 0 of ? in current phase
 Status: Ready to plan
-Last activity: 2026-03-14 - Completed quick task 1: Final cleanup pass: fix malformed docs, tighten Apply contract, clarify static behavior wording, add irreversible history tests, optional polish
+Last activity: 2026-03-14 - Completed quick task 2: BehaviorEval type alias, README polish, Apply contract docs
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -128,9 +128,10 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 1 | Final cleanup pass: fix malformed docs, tighten Apply contract, clarify static behavior wording, add irreversible history tests, optional polish | 2026-03-14 | 7a90157 | [1-final-cleanup-pass-fix-malformed-docs-ti](./quick/1-final-cleanup-pass-fix-malformed-docs-ti/) |
+| 2 | Final cleanup: add BehaviorEval type alias to fix clippy warning, polish README Quick Start with Outcome match, expand Apply trace contract docs | 2026-03-14 | 152314b | [2-final-cleanup-behavioreval-type-alias-re](./quick/2-final-cleanup-behavioreval-type-alias-re/) |
 
 ## Session Continuity
 
-Last session: 2026-03-14T03:45:59.764Z
-Stopped at: Completed 06-fill-gaps-03-PLAN.md
+Last session: 2026-03-14T05:52:22Z
+Stopped at: Completed quick task 2: BehaviorEval type alias, README polish, Apply contract docs
 Resume file: None
