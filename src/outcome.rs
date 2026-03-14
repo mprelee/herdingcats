@@ -21,7 +21,7 @@ use crate::spec::EngineSpec;
 ///
 /// `F = Frame<E>` is the conventional type argument for the frame-carrying
 /// [`Outcome`] variants (`Committed`, `Undone`, `Redone`).
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Frame<E: EngineSpec> {
     /// The input that triggered this dispatch.
     pub input: E::Input,
@@ -46,6 +46,20 @@ where
             traces: self.traces.clone(),
             reversibility: self.reversibility,
         }
+    }
+}
+
+impl<E: EngineSpec> PartialEq for Frame<E>
+where
+    E::Input: PartialEq,
+    E::Diff: PartialEq,
+    E::Trace: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.input == other.input
+            && self.diffs == other.diffs
+            && self.traces == other.traces
+            && self.reversibility == other.reversibility
     }
 }
 
