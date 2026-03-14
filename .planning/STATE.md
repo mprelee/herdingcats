@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: milestone
 status: planning
-stopped_at: Phase 6 context gathered
-last_updated: "2026-03-14T03:23:59.155Z"
+stopped_at: Completed 06-fill-gaps-01-PLAN.md
+last_updated: "2026-03-14T03:41:22.545Z"
 last_activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 13
-  completed_plans: 13
+  total_plans: 16
+  completed_plans: 14
   percent: 0
 ---
 
@@ -63,6 +63,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 05-architecture-alignment P01 | 4min | 2 tasks | 6 files |
 | Phase 05-architecture-alignment P02 | 3min | 1 tasks | 3 files |
 | Phase 05-architecture-alignment P03 | 5min | 2 tasks | 2 files |
+| Phase 06-fill-gaps P01 | 15min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,8 @@ Recent decisions affecting current work:
 - [Phase 05-02]: Apply trait doc now enforces trace contract: each state-mutating call MUST return at least one trace entry (was previously 'empty Vec is valid')
 - [Phase 05-architecture-alignment]: EngineSpec::State has no Default bound — callers supply initial state to Engine::new(), engine never calls Default internally
 - [Phase 05-architecture-alignment]: Test updated to use explicit vec![] construction instead of ::default() — proves Default bound is truly absent from EngineSpec
+- [Phase 06-fill-gaps]: BehaviorDef<E> is a plain struct with fn pointer fields — eliminates trait objects and Box<dyn Behavior<E>> from the behavior system
+- [Phase 06-fill-gaps]: Engine stores Vec<BehaviorDef<E>>; dispatch calls (behavior.evaluate)(...) with parentheses required for fn pointer call syntax
 
 ### Roadmap Evolution
 
@@ -119,6 +122,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T03:23:59.153Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-fill-gaps/06-CONTEXT.md
+Last session: 2026-03-14T03:41:22.544Z
+Stopped at: Completed 06-fill-gaps-01-PLAN.md
+Resume file: None
