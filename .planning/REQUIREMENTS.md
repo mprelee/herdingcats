@@ -34,8 +34,8 @@
 
 ### Testing
 
-- [ ] **TEST-01**: Unit tests cover dispatch outcomes, undo/redo behavior, all 15 core invariants, and edge cases
-- [ ] **TEST-02**: Property tests (proptest) verify determinism, atomicity, and undo/redo correctness across arbitrary operation sequences
+- [x] **TEST-01**: Unit tests cover dispatch outcomes, undo/redo behavior, all 15 core invariants, and edge cases
+- [x] **TEST-02**: Property tests (proptest) verify determinism, atomicity, and undo/redo correctness across arbitrary operation sequences
 
 ## v2 Requirements
 
@@ -82,8 +82,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HIST-04 | Phase 3 | Complete |
 | EXAM-01 | Phase 4 | Complete |
 | EXAM-02 | Phase 4 | Complete |
-| TEST-01 | Phase 4 | Pending |
-| TEST-02 | Phase 4 | Pending |
+| TEST-01 | Phase 4 | Complete |
+| TEST-02 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 17 total

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: milestone
 status: planning
-stopped_at: Completed 04-examples-and-tests-01-PLAN.md
-last_updated: "2026-03-14T02:04:53.308Z"
+stopped_at: Completed 04-examples-and-tests 04-03-PLAN.md
+last_updated: "2026-03-14T02:06:06.813Z"
 last_activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
   percent: 0
 ---
 
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03-history P02 | 5min | 2 tasks | 2 files |
 | Phase 04-examples-and-tests P02 | 1min | 1 tasks | 1 files |
 | Phase 04-examples-and-tests P01 | 2min | 1 tasks | 1 files |
+| Phase 04-examples-and-tests P03 | 3min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,8 @@ Recent decisions affecting current work:
 - [Phase 04-examples-and-tests]: BackgammonState.black_pos uses #[allow(dead_code)] — kept for domain clarity even though not exercised in the demo
 - [Phase 04-examples-and-tests]: CheckWin reads _input to simulate post-placement board state since behaviors evaluate pre-apply
 - [Phase 04-examples-and-tests]: NoChange demonstrated via zero-behavior engine — cleanest approach for 4-behavior game loop
+- [Phase 04-examples-and-tests]: Doc comments before proptest! macro converted to regular comments — rustdoc warns on /// before macro invocations
+- [Phase 04-examples-and-tests]: Op enum annotated with #[allow(dead_code)] — enum variants used only inside proptest! macro body, not detected by lint
 
 ### Pending Todos
 
@@ -101,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T02:04:53.306Z
-Stopped at: Completed 04-examples-and-tests-01-PLAN.md
+Last session: 2026-03-14T02:06:06.811Z
+Stopped at: Completed 04-examples-and-tests 04-03-PLAN.md
 Resume file: None
