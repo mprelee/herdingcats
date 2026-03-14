@@ -94,3 +94,13 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 2. Dispatch | 3/3 | Complete   | 2026-03-14 |
 | 3. History | 0/2 | Not started | - |
 | 4. Examples and Tests | 3/3 | Complete    | 2026-03-14 |
+
+### Phase 5: Architecture Alignment
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 4
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd:plan-phase 5 to break down)

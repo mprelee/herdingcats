@@ -93,6 +93,10 @@ Recent decisions affecting current work:
 - [Phase 04-examples-and-tests]: Doc comments before proptest! macro converted to regular comments — rustdoc warns on /// before macro invocations
 - [Phase 04-examples-and-tests]: Op enum annotated with #[allow(dead_code)] — enum variants used only inside proptest! macro body, not detected by lint
 
+### Roadmap Evolution
+
+- Phase 5 added: Architecture Alignment — align codebase with ARCHITECTURE.md (explicit non-committed outcomes, trace contract, static behavior composition, Frame/reversibility, EngineSpec bounds, outcome semantics, docs, tests)
+
 ### Pending Todos
 
 None yet.
