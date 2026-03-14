@@ -39,18 +39,19 @@ pub trait Apply<E: EngineSpec> {
 mod tests {
     use super::*;
 
+    #[derive(Debug, Clone)]
+    struct AppendByte(u8);
+
     struct TestSpec;
 
     impl EngineSpec for TestSpec {
         type State = Vec<u8>;
         type Input = u8;
-        type Diff = u8;
+        type Diff = AppendByte;
         type Trace = String;
         type NonCommittedInfo = String;
         type OrderKey = u32;
     }
-
-    struct AppendByte(u8);
 
     impl Apply<TestSpec> for AppendByte {
         fn apply(&self, state: &mut Vec<u8>) -> Vec<String> {

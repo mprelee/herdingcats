@@ -1,3 +1,5 @@
+use crate::apply::Apply;
+
 /// Bundles all game-specific associated types behind a single type parameter,
 /// eliminating generic explosion in function signatures.
 ///
@@ -10,20 +12,53 @@
 /// # Example
 ///
 /// ```
-/// use herdingcats::EngineSpec;
+/// use herdingcats::{EngineSpec, Apply};
 ///
 /// struct MySpec;
 ///
+/// #[derive(Debug, Clone)]
+/// struct MyDiff(u8);
+///
+/// impl Apply<MySpec> for MyDiff {
+///     fn apply(&self, state: &mut Vec<u8>) -> Vec<String> {
+///         state.push(self.0);
+///         vec![format!("pushed {}", self.0)]
+///     }
+/// }
+///
 /// impl EngineSpec for MySpec {
-///     type State = Vec<String>;
+///     type State = Vec<u8>;
 ///     type Input = String;
-///     type Diff = String;
+///     type Diff = MyDiff;
 ///     type Trace = String;
 ///     type NonCommittedInfo = String;
 ///     type OrderKey = u32;
 /// }
 /// ```
-pub trait EngineSpec {
+///
+/// # `Diff` must implement `Apply<Self>`
+///
+/// The `Diff` associated type carries an `Apply<Self>` bound. This means
+/// every diff type must be capable of applying itself to the game state.
+/// A type that does not implement `Apply` cannot be used as `EngineSpec::Diff`:
+///
+/// ```compile_fail
+/// use herdingcats::{EngineSpec, Apply};
+///
+/// struct BadSpec;
+///
+/// struct BadDiff; // intentionally missing Apply<BadSpec>
+///
+/// impl EngineSpec for BadSpec {
+///     type State = Vec<u8>;
+///     type Input = u8;
+///     type Diff = BadDiff; // compile error: BadDiff does not impl Apply<BadSpec>
+///     type Trace = String;
+///     type NonCommittedInfo = String;
+///     type OrderKey = u32;
+/// }
+/// ```
+pub trait EngineSpec: Sized {
     /// The game state type. Must support cloning (for CoW snapshots),
     /// debug formatting, and default construction (for engine initialisation).
     type State: Clone + std::fmt::Debug + Default;
@@ -32,8 +67,8 @@ pub trait EngineSpec {
     type Input: Clone + std::fmt::Debug;
 
     /// A single, atomic state mutation produced by a behavior during dispatch.
-    /// Must support cloning and debug.
-    type Diff: Clone + std::fmt::Debug;
+    /// Must support cloning, debug, and self-application via [`Apply`].
+    type Diff: Clone + std::fmt::Debug + Apply<Self>;
 
     /// Per-diff metadata appended to `Frame` at the moment a diff is applied.
     /// Must support cloning and debug.
@@ -51,6 +86,7 @@ pub trait EngineSpec {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::apply::Apply;
 
     struct TestSpec;
 
@@ -61,6 +97,14 @@ mod tests {
         type Trace = String;
         type NonCommittedInfo = String;
         type OrderKey = u32;
+    }
+
+    // u8 satisfies the Apply<TestSpec> bound required by EngineSpec::Diff.
+    impl Apply<TestSpec> for u8 {
+        fn apply(&self, state: &mut Vec<u8>) -> Vec<String> {
+            state.push(*self);
+            vec![format!("applied {}", self)]
+        }
     }
 
     #[test]

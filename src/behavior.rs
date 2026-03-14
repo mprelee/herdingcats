@@ -119,6 +119,7 @@ pub trait Behavior<E: EngineSpec> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::apply::Apply;
     use crate::spec::EngineSpec;
 
     struct TestSpec;
@@ -130,6 +131,14 @@ mod tests {
         type Trace = String;
         type NonCommittedInfo = String;
         type OrderKey = u32;
+    }
+
+    // u8 satisfies the Apply<TestSpec> bound required by EngineSpec::Diff.
+    impl Apply<TestSpec> for u8 {
+        fn apply(&self, state: &mut Vec<u8>) -> Vec<String> {
+            state.push(*self);
+            vec![format!("applied {}", self)]
+        }
     }
 
     struct PassthroughBehavior;
