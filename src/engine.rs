@@ -1055,6 +1055,128 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
+    // Irreversible history semantics tests (quick-01 final cleanup)
+    // -----------------------------------------------------------------------
+
+    #[cfg(test)]
+    mod irreversible_history_tests {
+        use super::*;
+        use crate::apply::Apply;
+        use crate::outcome::HistoryDisallowed;
+        use crate::spec::EngineSpec;
+
+        struct IrrevSpec;
+
+        impl EngineSpec for IrrevSpec {
+            type State = Vec<u8>;
+            type Input = u8;
+            type Diff = u8;
+            type Trace = String;
+            type NonCommittedInfo = String;
+            type OrderKey = u32;
+        }
+
+        impl Apply<IrrevSpec> for u8 {
+            fn apply(&self, state: &mut Vec<u8>) -> Vec<String> {
+                state.push(*self);
+                vec![format!("appended {}", self)]
+            }
+        }
+
+        fn append_eval(input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+            BehaviorResult::Continue(vec![*input])
+        }
+
+        fn make_engine() -> Engine<IrrevSpec> {
+            Engine::<IrrevSpec>::new(
+                vec![],
+                vec![BehaviorDef { name: "append", order_key: 0u32, evaluate: append_eval }],
+            )
+        }
+
+        /// A reversible dispatch pushes a frame onto the undo stack; undo() returns Undone(frame).
+        #[test]
+        fn irreversible_history_reversible_commit_is_undoable() {
+            let mut engine = make_engine();
+            let outcome = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+            let committed_frame = if let Outcome::Committed(f) = outcome { f }
+                else { panic!("expected Committed") };
+
+            let undo_result = engine.undo().unwrap();
+            assert!(
+                matches!(undo_result, Outcome::Undone(ref f) if f == &committed_frame),
+                "reversible commit must be undoable: undo() must return Undone(frame)"
+            );
+        }
+
+        /// Two reversible commits followed by one irreversible commit clears both stacks.
+        /// The irreversible boundary erases all history before and including that frame.
+        #[test]
+        fn irreversible_history_irreversible_commit_clears_all_history() {
+            let mut engine = make_engine();
+            let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+            let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
+            assert_eq!(engine.undo_depth(), 2, "setup: two reversible frames on undo stack");
+
+            let _ = engine.dispatch(99u8, Reversibility::Irreversible).unwrap();
+
+            assert_eq!(
+                engine.undo_depth(), 0,
+                "irreversible commit must clear undo stack to 0"
+            );
+            assert_eq!(
+                engine.redo_depth(), 0,
+                "irreversible commit must clear redo stack to 0"
+            );
+        }
+
+        /// After an irreversible commit the undo stack is empty;
+        /// calling undo() must return Disallowed(NothingToUndo) without panicking.
+        #[test]
+        fn irreversible_history_after_irreversible_commit_undo_returns_nothing_to_undo() {
+            let mut engine = make_engine();
+            let _ = engine.dispatch(1u8, Reversibility::Irreversible).unwrap();
+
+            let result = engine.undo().unwrap();
+            assert!(
+                matches!(result, Outcome::Disallowed(HistoryDisallowed::NothingToUndo)),
+                "after irreversible commit, undo() must return Disallowed(NothingToUndo)"
+            );
+        }
+
+        /// After an irreversible commit the redo stack is also empty;
+        /// calling redo() must return Disallowed(NothingToRedo) without panicking.
+        #[test]
+        fn irreversible_history_after_irreversible_commit_redo_returns_nothing_to_redo() {
+            let mut engine = make_engine();
+            let _ = engine.dispatch(1u8, Reversibility::Irreversible).unwrap();
+
+            let result = engine.redo().unwrap();
+            assert!(
+                matches!(result, Outcome::Disallowed(HistoryDisallowed::NothingToRedo)),
+                "after irreversible commit, redo() must return Disallowed(NothingToRedo)"
+            );
+        }
+
+        /// A reversible commit followed by undo puts a frame on the redo stack.
+        /// A subsequent irreversible commit must erase that redo entry too.
+        #[test]
+        fn irreversible_history_irreversible_commit_preceded_by_undo_clears_redo_too() {
+            let mut engine = make_engine();
+            let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+            let _ = engine.undo().unwrap();
+            assert_eq!(engine.redo_depth(), 1, "setup: undo must have populated redo stack");
+
+            let _ = engine.dispatch(2u8, Reversibility::Irreversible).unwrap();
+
+            assert_eq!(
+                engine.redo_depth(), 0,
+                "irreversible commit must clear redo stack even when it was populated before"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Phase 4 tests: property tests (proptest)
     // -----------------------------------------------------------------------
 
