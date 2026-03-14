@@ -9,7 +9,6 @@
 //! [`EngineError`] is a separate type used for unrecoverable engine-level
 //! failures; it is distinct from `Outcome` and returned via `Result<Outcome, EngineError>`.
 
-use crate::reversibility::Reversibility;
 use crate::spec::EngineSpec;
 
 /// A non-committed outcome explicitly chosen by a [`Behavior`](crate::behavior::Behavior).
@@ -49,8 +48,11 @@ impl<F, N> From<NonCommittedOutcome<N>> for Outcome<F, N> {
 ///
 /// A `Frame<E>` is produced exactly once per successful `dispatch` call and
 /// stored in the history stack. It bundles the originating input, all diffs
-/// applied during that dispatch (in application order), all trace entries
-/// emitted, and the reversibility declaration made at dispatch time.
+/// applied during that dispatch (in application order), and all trace entries
+/// emitted during that dispatch.
+///
+/// Reversibility is dispatch metadata stored in the history stack tuple, not
+/// in the frame itself.
 ///
 /// `F = Frame<E>` is the conventional type argument for the frame-carrying
 /// [`Outcome`] variants (`Committed`, `Undone`, `Redone`).
@@ -62,8 +64,6 @@ pub struct Frame<E: EngineSpec> {
     pub diffs: Vec<E::Diff>,
     /// All trace entries emitted during this dispatch, in emission order.
     pub traces: Vec<E::Trace>,
-    /// Whether this transition was marked reversible or irreversible at dispatch time.
-    pub reversibility: Reversibility,
 }
 
 impl<E: EngineSpec> Clone for Frame<E>
@@ -77,7 +77,6 @@ where
             input: self.input.clone(),
             diffs: self.diffs.clone(),
             traces: self.traces.clone(),
-            reversibility: self.reversibility,
         }
     }
 }
@@ -92,7 +91,6 @@ where
         self.input == other.input
             && self.diffs == other.diffs
             && self.traces == other.traces
-            && self.reversibility == other.reversibility
     }
 }
 
@@ -186,7 +184,6 @@ pub enum HistoryDisallowed {
 mod tests {
     use super::*;
     use crate::apply::Apply;
-    use crate::reversibility::Reversibility;
     use crate::spec::EngineSpec;
 
     #[derive(Debug, Clone, PartialEq)]
@@ -214,7 +211,6 @@ mod tests {
             input: 42u8,
             diffs: vec![1u8],
             traces: vec!["t".to_string()],
-            reversibility: Reversibility::Reversible,
         }
     }
 
@@ -226,7 +222,6 @@ mod tests {
         assert_eq!(f.input, 42u8);
         assert_eq!(f.diffs[0], 1u8);
         assert_eq!(f.traces[0], "t");
-        assert_eq!(f.reversibility, Reversibility::Reversible);
     }
 
     #[test]
@@ -235,26 +230,11 @@ mod tests {
             input: 7u8,
             diffs: vec![10u8, 20u8],
             traces: vec!["first".to_string(), "second".to_string()],
-            reversibility: Reversibility::Irreversible,
         };
         assert_eq!(f.diffs.len(), 2);
         assert_eq!(f.traces.len(), 2);
         assert_eq!(f.diffs[0], 10u8);
         assert_eq!(f.traces[1], "second");
-    }
-
-    #[test]
-    fn frame_stores_reversibility() {
-        let f = make_frame();
-        assert_eq!(f.reversibility, Reversibility::Reversible);
-
-        let f2 = Frame::<TestSpec> {
-            input: 0u8,
-            diffs: vec![],
-            traces: vec![],
-            reversibility: Reversibility::Irreversible,
-        };
-        assert_eq!(f2.reversibility, Reversibility::Irreversible);
     }
 
     #[test]

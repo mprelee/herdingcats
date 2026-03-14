@@ -31,7 +31,7 @@ use crate::spec::EngineSpec;
 pub trait Apply<E: EngineSpec> {
     /// Mutate `state` with this diff and return any trace entries produced.
     ///
-    /// Returning an empty `Vec` is valid for diffs that produce no trace.
+    /// Each call MUST return at least one trace entry describing the mutation. The engine does not accept empty trace from a state-mutating diff.
     fn apply(&self, state: &mut E::State) -> Vec<E::Trace>;
 }
 

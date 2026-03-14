@@ -64,8 +64,8 @@ use crate::apply::Apply;
 pub struct Engine<E: EngineSpec> {
     state: E::State,
     behaviors: Vec<Box<dyn Behavior<E>>>,
-    undo_stack: Vec<(E::State, Frame<E>)>,
-    redo_stack: Vec<(E::State, Frame<E>)>,
+    undo_stack: Vec<(E::State, Frame<E>, Reversibility)>,
+    redo_stack: Vec<(E::State, Frame<E>, Reversibility)>,
 }
 
 impl<E: EngineSpec> Engine<E> {
@@ -161,13 +161,12 @@ impl<E: EngineSpec> Engine<E> {
             input,
             diffs,
             traces,
-            reversibility,
         };
 
         // Single-timeline history: any new commit erases the redo future.
         self.redo_stack.clear();
-        // Push snapshot + frame unconditionally on Committed.
-        self.undo_stack.push((prior_state, frame.clone()));
+        // Push snapshot + frame + reversibility unconditionally on Committed.
+        self.undo_stack.push((prior_state, frame.clone(), reversibility));
 
         // Irreversible commits also wipe undo history — the transition is permanent.
         if reversibility == Reversibility::Irreversible {
@@ -198,9 +197,9 @@ impl<E: EngineSpec> Engine<E> {
     ) -> Result<Outcome<Frame<E>, HistoryDisallowed>, EngineError> {
         match self.undo_stack.pop() {
             None => Ok(Outcome::Disallowed(HistoryDisallowed::NothingToUndo)),
-            Some((prior_state, frame)) => {
+            Some((prior_state, frame, reversibility)) => {
                 let current_state = std::mem::replace(&mut self.state, prior_state);
-                self.redo_stack.push((current_state, frame.clone()));
+                self.redo_stack.push((current_state, frame.clone(), reversibility));
                 Ok(Outcome::Undone(frame))
             }
         }
@@ -225,9 +224,9 @@ impl<E: EngineSpec> Engine<E> {
     ) -> Result<Outcome<Frame<E>, HistoryDisallowed>, EngineError> {
         match self.redo_stack.pop() {
             None => Ok(Outcome::Disallowed(HistoryDisallowed::NothingToRedo)),
-            Some((prior_state, frame)) => {
+            Some((prior_state, frame, reversibility)) => {
                 let current_state = std::mem::replace(&mut self.state, prior_state);
-                self.undo_stack.push((current_state, frame.clone()));
+                self.undo_stack.push((current_state, frame.clone(), reversibility));
                 Ok(Outcome::Redone(frame))
             }
         }
@@ -545,7 +544,6 @@ mod tests {
             assert_eq!(frame.input, 77u8);
             assert!(!frame.diffs.is_empty());
             assert!(!frame.traces.is_empty());
-            assert_eq!(frame.reversibility, Reversibility::Irreversible);
         } else {
             panic!("expected Committed");
         }
