@@ -56,13 +56,11 @@ pub enum BehaviorResult<D, N> {
 ///
 /// Receives immutable borrows of the input and state, returning a
 /// [`BehaviorResult`] with diffs or a stop signal.
-pub type BehaviorEval<E> = fn(
-    &<E as EngineSpec>::Input,
-    &<E as EngineSpec>::State,
-) -> BehaviorResult<
-    <E as EngineSpec>::Diff,
-    <E as EngineSpec>::NonCommittedInfo,
->;
+pub type BehaviorEval<E> =
+    fn(
+        &<E as EngineSpec>::Input,
+        &<E as EngineSpec>::State,
+    ) -> BehaviorResult<<E as EngineSpec>::Diff, <E as EngineSpec>::NonCommittedInfo>;
 
 /// A single rule in the game, expressed as a plain struct with fn pointer fields.
 ///
