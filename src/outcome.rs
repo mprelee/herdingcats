@@ -21,7 +21,7 @@ use crate::spec::EngineSpec;
 ///
 /// `F = Frame<E>` is the conventional type argument for the frame-carrying
 /// [`Outcome`] variants (`Committed`, `Undone`, `Redone`).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct Frame<E: EngineSpec> {
     /// The input that triggered this dispatch.
     pub input: E::Input,
@@ -31,6 +31,22 @@ pub struct Frame<E: EngineSpec> {
     pub traces: Vec<E::Trace>,
     /// Whether this transition was marked reversible or irreversible at dispatch time.
     pub reversibility: Reversibility,
+}
+
+impl<E: EngineSpec> Clone for Frame<E>
+where
+    E::Input: Clone,
+    E::Diff: Clone,
+    E::Trace: Clone,
+{
+    fn clone(&self) -> Self {
+        Frame {
+            input: self.input.clone(),
+            diffs: self.diffs.clone(),
+            traces: self.traces.clone(),
+            reversibility: self.reversibility,
+        }
+    }
 }
 
 /// The result of a single `dispatch`, `undo`, or `redo` call.

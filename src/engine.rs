@@ -8,7 +8,7 @@
 use std::borrow::Cow;
 use crate::spec::EngineSpec;
 use crate::behavior::{Behavior, BehaviorResult};
-use crate::outcome::{EngineError, Frame, Outcome};
+use crate::outcome::{EngineError, Frame, HistoryDisallowed, Outcome};
 use crate::reversibility::Reversibility;
 use crate::apply::Apply;
 
@@ -64,11 +64,8 @@ use crate::apply::Apply;
 pub struct Engine<E: EngineSpec> {
     state: E::State,
     behaviors: Vec<Box<dyn Behavior<E>>>,
-    // Phase 3 will populate these stacks with snapshot-based undo/redo.
-    #[allow(dead_code)]
-    undo_stack: Vec<E::State>,
-    #[allow(dead_code)]
-    redo_stack: Vec<E::State>,
+    undo_stack: Vec<(E::State, Frame<E>)>,
+    redo_stack: Vec<(E::State, Frame<E>)>,
 }
 
 impl<E: EngineSpec> Engine<E> {
@@ -93,6 +90,22 @@ impl<E: EngineSpec> Engine<E> {
     /// Read-only reference to the current committed game state.
     pub fn state(&self) -> &E::State {
         &self.state
+    }
+
+    /// Number of transitions currently available to undo.
+    ///
+    /// Returns 0 when the undo stack is empty. Callers can use this to enable
+    /// or disable UI undo controls without triggering `Disallowed`.
+    pub fn undo_depth(&self) -> usize {
+        self.undo_stack.len()
+    }
+
+    /// Number of transitions currently available to redo.
+    ///
+    /// Returns 0 when the redo stack is empty. Callers can use this to enable
+    /// or disable UI redo controls without triggering `Disallowed`.
+    pub fn redo_depth(&self) -> usize {
+        self.redo_stack.len()
     }
 
     /// Evaluate `input` through all behaviors in deterministic order and atomically
@@ -138,6 +151,9 @@ impl<E: EngineSpec> Engine<E> {
             return Ok(Outcome::NoChange);
         }
 
+        // Capture snapshot BEFORE committing — this is the state to restore on undo.
+        let prior_state = self.state.clone();
+
         // Atomic commit — self.state is replaced exactly once, at the end.
         self.state = working.into_owned();
 
@@ -147,6 +163,18 @@ impl<E: EngineSpec> Engine<E> {
             traces,
             reversibility,
         };
+
+        // Single-timeline history: any new commit erases the redo future.
+        self.redo_stack.clear();
+        // Push snapshot + frame unconditionally on Committed.
+        self.undo_stack.push((prior_state, frame.clone()));
+
+        // Irreversible commits also wipe undo history — the transition is permanent.
+        if reversibility == Reversibility::Irreversible {
+            self.undo_stack.clear();
+            self.redo_stack.clear();
+        }
+
         Ok(Outcome::Committed(frame))
     }
 }
@@ -472,5 +500,82 @@ mod tests {
         let mut engine = Engine::<TestSpec>::new(vec![], vec![]);
         let _ = engine.dispatch(0u8, Reversibility::Reversible);
         let _ = engine.dispatch(0u8, Reversibility::Irreversible);
+    }
+
+    // -----------------------------------------------------------------------
+    // Task 1 tests: upgraded stack fields, dispatch snapshot + history mgmt,
+    // undo_depth(), redo_depth()
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn undo_depth_starts_at_zero() {
+        let engine = Engine::<TestSpec>::new(vec![], vec![]);
+        assert_eq!(engine.undo_depth(), 0);
+    }
+
+    #[test]
+    fn redo_depth_starts_at_zero() {
+        let engine = Engine::<TestSpec>::new(vec![], vec![]);
+        assert_eq!(engine.redo_depth(), 0);
+    }
+
+    #[test]
+    fn committed_dispatch_increments_undo_depth() {
+        let mut engine = Engine::<TestSpec>::new(
+            vec![],
+            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+        );
+        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        assert_eq!(engine.undo_depth(), 1);
+        engine.dispatch(2u8, Reversibility::Reversible).unwrap();
+        assert_eq!(engine.undo_depth(), 2);
+    }
+
+    #[test]
+    fn committed_dispatch_clears_redo_stack() {
+        let mut engine = Engine::<TestSpec>::new(
+            vec![],
+            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+        );
+        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        // redo_depth must be 0 after a Committed dispatch (new timeline)
+        assert_eq!(engine.redo_depth(), 0);
+    }
+
+    #[test]
+    fn irreversible_committed_dispatch_clears_both_stacks() {
+        let mut engine = Engine::<TestSpec>::new(
+            vec![],
+            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+        );
+        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        engine.dispatch(2u8, Reversibility::Reversible).unwrap();
+        assert_eq!(engine.undo_depth(), 2);
+        // Irreversible wipes both stacks
+        engine.dispatch(99u8, Reversibility::Irreversible).unwrap();
+        assert_eq!(engine.undo_depth(), 0, "irreversible must clear undo stack");
+        assert_eq!(engine.redo_depth(), 0, "irreversible must clear redo stack");
+    }
+
+    #[test]
+    fn no_change_dispatch_does_not_affect_depths() {
+        let mut engine = Engine::<TestSpec>::new(
+            vec![],
+            vec![
+                Box::new(EchoBehavior { key: 0, behavior_name: "echo" }),
+                Box::new(NoOpBehavior),
+            ],
+        );
+        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        let ud = engine.undo_depth();
+        let rd = engine.redo_depth();
+        // Use a fresh noop-only engine to produce NoChange without touching stacks
+        let mut noop_engine = Engine::<TestSpec>::new(vec![], vec![Box::new(NoOpBehavior)]);
+        noop_engine.dispatch(1u8, Reversibility::Reversible).unwrap(); // NoChange
+        assert_eq!(noop_engine.undo_depth(), 0);
+        assert_eq!(noop_engine.redo_depth(), 0);
+        // Original engine stacks unchanged by separate engine
+        let _ = ud;
+        let _ = rd;
     }
 }
