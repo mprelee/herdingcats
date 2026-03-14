@@ -113,7 +113,7 @@ are rolled, you cannot undo before the roll).
 ## Quick Start
 
 ```rust
-use herdingcats::{Engine, EngineSpec, Apply, BehaviorDef, BehaviorResult, Reversibility};
+use herdingcats::{Engine, EngineSpec, Apply, BehaviorDef, BehaviorResult, Reversibility, Outcome};
 
 // 1. Define your spec (bundles all associated types)
 struct MySpec;
@@ -147,15 +147,19 @@ fn append_eval(input: &u8, _state: &Vec<u8>) -> BehaviorResult<AppendDiff, Strin
 let behaviors = vec![
     BehaviorDef::<MySpec> { name: "append", order_key: 0, evaluate: append_eval },
 ];
-let engine = Engine::<MySpec>::new(vec![], behaviors);
+let mut engine = Engine::<MySpec>::new(vec![], behaviors);
 
 // 5. Dispatch an Input
 let outcome = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
+match outcome {
+    Outcome::Committed(frame) => println!("committed {} diffs", frame.diffs.len()),
+    other => println!("outcome: {:?}", other),
+}
 ```
 
-## Architecture Status
+## Architecture Status (MVP)
 
-v0.5.0 implements the full architecture described in `ARCHITECTURE.md`:
+v0.5.0 implements the full MVP architecture described in `ARCHITECTURE.md`:
 
 - Static behavior set via `BehaviorDef` structs (fn pointers, no trait objects)
 - Copy-on-write working state (zero-clone until first diff)

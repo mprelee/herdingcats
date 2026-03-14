@@ -28,6 +28,17 @@ use crate::spec::EngineSpec;
 ///     }
 /// }
 /// ```
+/// # Trace contract (trusted invariant)
+///
+/// Each state-mutating `apply` call **must** return at least one trace entry.
+/// A no-op diff (one that does not mutate state) may return an empty `Vec`.
+///
+/// This contract is **not** enforced by the trait signature — `Vec<E::Trace>`
+/// cannot express "non-empty if state changed" at the type level. Instead, the
+/// engine enforces it with a `debug_assert!` in dispatch: violations panic in
+/// debug and test builds. Production builds skip the check for performance.
+///
+/// Existing contract tests in this module verify both sides of the rule.
 pub trait Apply<E: EngineSpec> {
     /// Mutate `state` with this diff and return any trace entries produced.
     ///
