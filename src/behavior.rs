@@ -11,10 +11,11 @@
 //! ## Design
 //!
 //! The behavior set is static and known at compile time. `BehaviorDef<E>` is a
-//! plain struct with fn pointer fields — no trait objects, no `dyn` dispatch.
-//! Behaviors are constructed once, sorted by `(order_key, name)`, and stored in
-//! the engine's `Vec<BehaviorDef<E>>`. The engine calls each `evaluate` fn
-//! pointer in order, collecting diffs that are applied centrally.
+//! plain struct with fn pointer fields — no trait objects, no `dyn` dispatch,
+//! no runtime registration. Behaviors are constructed once, sorted by
+//! `(order_key, name)`, and stored in the engine's `Vec<BehaviorDef<E>>`. The
+//! engine calls each `evaluate` fn pointer in order, collecting diffs that are
+//! applied centrally.
 
 use crate::outcome::NonCommittedOutcome;
 use crate::spec::EngineSpec;

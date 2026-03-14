@@ -138,6 +138,11 @@ impl<E: EngineSpec> Engine<E> {
                     for diff in new_diffs {
                         // to_mut() clones state on FIRST call only (Cow::Borrowed → Owned).
                         let new_traces = diff.apply(working.to_mut());
+                        debug_assert!(
+                            !new_traces.is_empty(),
+                            "Apply::apply() contract violation: diff mutated state but returned zero trace entries. \
+                             Every state-mutating diff MUST return at least one trace entry."
+                        );
                         traces.extend(new_traces);
                         diffs.push(diff);
                     }

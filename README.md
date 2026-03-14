@@ -153,6 +153,16 @@ let engine = Engine::<MySpec>::new(vec![], behaviors);
 let outcome = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
 ```
 
+## Architecture Status
+
+v0.5.0 implements the full architecture described in `ARCHITECTURE.md`:
+
+- Static behavior set via `BehaviorDef` structs (fn pointers, no trait objects)
+- Copy-on-write working state (zero-clone until first diff)
+- Snapshot-based undo/redo (no `Reversible` trait burden)
+- Deterministic `(order_key, name)` behavior ordering
+- `Apply` trace contract enforced by `debug_assert!` in dispatch
+
 ## Zero Dependencies
 
 HerdingCats has no runtime dependencies. `proptest` is a dev-only dependency used for

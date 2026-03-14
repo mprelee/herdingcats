@@ -32,6 +32,7 @@ pub trait Apply<E: EngineSpec> {
     /// Mutate `state` with this diff and return any trace entries produced.
     ///
     /// Each call MUST return at least one trace entry describing the mutation. The engine does not accept empty trace from a state-mutating diff.
+    /// The engine enforces this contract with a `debug_assert!` in dispatch — violations panic in debug/test builds.
     fn apply(&self, state: &mut E::State) -> Vec<E::Trace>;
 }
 
