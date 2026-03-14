@@ -52,6 +52,18 @@ pub enum BehaviorResult<D, N> {
     Stop(NonCommittedOutcome<N>),
 }
 
+/// Type alias for the evaluate fn pointer signature used by [`BehaviorDef`].
+///
+/// Receives immutable borrows of the input and state, returning a
+/// [`BehaviorResult`] with diffs or a stop signal.
+pub type BehaviorEval<E> = fn(
+    &<E as EngineSpec>::Input,
+    &<E as EngineSpec>::State,
+) -> BehaviorResult<
+    <E as EngineSpec>::Diff,
+    <E as EngineSpec>::NonCommittedInfo,
+>;
+
 /// A single rule in the game, expressed as a plain struct with fn pointer fields.
 ///
 /// The behavior set is static and determined at engine construction. `BehaviorDef<E>`
@@ -158,7 +170,7 @@ pub struct BehaviorDef<E: EngineSpec> {
     /// Note: call as `(behavior.evaluate)(input, state)` — the parentheses
     /// are required because Rust would otherwise interpret `behavior.evaluate(...)`
     /// as a method call rather than a fn pointer call.
-    pub evaluate: fn(&E::Input, &E::State) -> BehaviorResult<E::Diff, E::NonCommittedInfo>,
+    pub evaluate: BehaviorEval<E>,
 }
 
 impl<E: EngineSpec> std::fmt::Debug for BehaviorDef<E>
