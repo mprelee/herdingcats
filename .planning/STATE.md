@@ -4,7 +4,7 @@ milestone: v0.5
 milestone_name: milestone
 status: planning
 stopped_at: Completed 01-core-types-01-02-PLAN.md
-last_updated: "2026-03-14T00:04:46.981Z"
+last_updated: "2026-03-14T00:06:53.580Z"
 last_activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
 progress:
   total_phases: 4
