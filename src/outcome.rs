@@ -9,13 +9,15 @@
 //! [`EngineError`] is a separate type used for unrecoverable engine-level
 //! failures; it is distinct from `Outcome` and returned via `Result<Outcome, EngineError>`.
 
+use crate::reversibility::Reversibility;
 use crate::spec::EngineSpec;
 
 /// The canonical committed record of a single dispatch transition.
 ///
 /// A `Frame<E>` is produced exactly once per successful `dispatch` call and
-/// stored in the history stack. It bundles the originating input, the aggregate
-/// diff describing the state change, and any per-dispatch trace metadata.
+/// stored in the history stack. It bundles the originating input, all diffs
+/// applied during that dispatch (in application order), all trace entries
+/// emitted, and the reversibility declaration made at dispatch time.
 ///
 /// `F = Frame<E>` is the conventional type argument for the frame-carrying
 /// [`Outcome`] variants (`Committed`, `Undone`, `Redone`).
@@ -23,10 +25,12 @@ use crate::spec::EngineSpec;
 pub struct Frame<E: EngineSpec> {
     /// The input that triggered this dispatch.
     pub input: E::Input,
-    /// The aggregate diff describing how state changed.
-    pub diff: E::Diff,
-    /// Per-dispatch trace metadata (e.g. annotations, timing, debug info).
-    pub trace: E::Trace,
+    /// All diffs applied during this dispatch, in application order.
+    pub diffs: Vec<E::Diff>,
+    /// All trace entries emitted during this dispatch, in emission order.
+    pub traces: Vec<E::Trace>,
+    /// Whether this transition was marked reversible or irreversible at dispatch time.
+    pub reversibility: Reversibility,
 }
 
 /// The result of a single `dispatch`, `undo`, or `redo` call.
@@ -103,6 +107,8 @@ pub enum EngineError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::apply::Apply;
+    use crate::reversibility::Reversibility;
     use crate::spec::EngineSpec;
 
     #[derive(Debug, Clone, PartialEq)]
@@ -117,11 +123,20 @@ mod tests {
         type OrderKey = u32;
     }
 
+    // u8 satisfies the Apply<TestSpec> bound required by EngineSpec::Diff.
+    impl Apply<TestSpec> for u8 {
+        fn apply(&self, state: &mut Vec<u8>) -> Vec<String> {
+            state.push(*self);
+            vec![format!("applied {}", self)]
+        }
+    }
+
     fn make_frame() -> Frame<TestSpec> {
         Frame {
             input: 42u8,
-            diff: 1u8,
-            trace: "t".to_string(),
+            diffs: vec![1u8],
+            traces: vec!["t".to_string()],
+            reversibility: Reversibility::Reversible,
         }
     }
 
@@ -131,8 +146,37 @@ mod tests {
         let g = f.clone();
         assert_eq!(f, g);
         assert_eq!(f.input, 42u8);
-        assert_eq!(f.diff, 1u8);
-        assert_eq!(f.trace, "t");
+        assert_eq!(f.diffs[0], 1u8);
+        assert_eq!(f.traces[0], "t");
+        assert_eq!(f.reversibility, Reversibility::Reversible);
+    }
+
+    #[test]
+    fn frame_stores_vec_diffs_and_vec_traces() {
+        let f = Frame::<TestSpec> {
+            input: 7u8,
+            diffs: vec![10u8, 20u8],
+            traces: vec!["first".to_string(), "second".to_string()],
+            reversibility: Reversibility::Irreversible,
+        };
+        assert_eq!(f.diffs.len(), 2);
+        assert_eq!(f.traces.len(), 2);
+        assert_eq!(f.diffs[0], 10u8);
+        assert_eq!(f.traces[1], "second");
+    }
+
+    #[test]
+    fn frame_stores_reversibility() {
+        let f = make_frame();
+        assert_eq!(f.reversibility, Reversibility::Reversible);
+
+        let f2 = Frame::<TestSpec> {
+            input: 0u8,
+            diffs: vec![],
+            traces: vec![],
+            reversibility: Reversibility::Irreversible,
+        };
+        assert_eq!(f2.reversibility, Reversibility::Irreversible);
     }
 
     #[test]

@@ -20,3 +20,5 @@ mod reversibility;
 pub use crate::spec::EngineSpec;
 pub use crate::behavior::{Behavior, BehaviorResult};
 pub use crate::outcome::{EngineError, Frame, Outcome};
+pub use crate::apply::Apply;
+pub use crate::reversibility::Reversibility;
