@@ -16,6 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Dispatch** - Implement CoW working state and the ordered, atomic dispatch algorithm (completed 2026-03-14)
 - [ ] **Phase 3: History** - Implement undo/redo with snapshot strategy and irreversibility boundary
 - [x] **Phase 4: Examples and Tests** - Implement tic-tac-toe and backgammon examples; write unit and property tests (completed 2026-03-14)
+- [ ] **Phase 5: Architecture Alignment** - Align codebase with ARCHITECTURE.md: NonCommittedOutcome, Frame shape, EngineSpec bounds, trace contract, docs
 
 ## Phase Details
 
@@ -83,10 +84,29 @@ Plans:
 - [ ] 04-02-PLAN.md — Backgammon irreversibility demo (RollDice clears history) (EXAM-02)
 - [ ] 04-03-PLAN.md — 15 invariant unit tests + 2 proptest suites in engine.rs (TEST-01, TEST-02)
 
+### Phase 5: Architecture Alignment
+**Goal**: Align the v0.5.0 codebase with ARCHITECTURE.md exactly — fix mismatches in non-committed outcome dispatch, trace contract, Frame shape, EngineSpec bounds, outcome semantics, and documentation
+**Depends on**: Phase 4
+**Requirements**: SC-1, SC-2, SC-3, SC-4, SC-5, SC-6, SC-7
+**Success Criteria** (what must be TRUE):
+  1. `BehaviorResult::Stop` wraps `NonCommittedOutcome<N>` with `InvalidInput`, `Disallowed`, `Aborted` variants — behaviors explicitly choose the non-committed reason
+  2. `Frame<E>` contains only `input`, `diffs`, `traces` — no `reversibility` field; reversibility is stored in history stack tuples
+  3. `EngineSpec::State` requires `Clone + Debug` only — no `Default` bound
+  4. Apply trait docs state each call MUST return at least one trace entry
+  5. `cargo test` passes all existing tests updated to the new API
+  6. `cargo run --example tictactoe` and `cargo run --example backgammon` compile and run with updated API
+  7. README.md describes the architecture model
+**Plans**: 3 plans
+
+Plans:
+- [ ] 05-01-PLAN.md — NonCommittedOutcome contract + BehaviorResult update + example migrations (SC-1, SC-5, SC-6)
+- [ ] 05-02-PLAN.md — Frame shape cleanup + Apply trace doc contract (SC-2, SC-4)
+- [ ] 05-03-PLAN.md — EngineSpec Default removal + README (SC-3, SC-7)
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -94,13 +114,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 2. Dispatch | 3/3 | Complete   | 2026-03-14 |
 | 3. History | 0/2 | Not started | - |
 | 4. Examples and Tests | 3/3 | Complete    | 2026-03-14 |
-
-### Phase 5: Architecture Alignment
-
-**Goal:** [To be planned]
-**Requirements**: TBD
-**Depends on:** Phase 4
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd:plan-phase 5 to break down)
+| 5. Architecture Alignment | 0/3 | Not started | - |
