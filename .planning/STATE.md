@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-03-13)
 Phase: 1 of 4 (Core Types)
 Plan: 0 of ? in current phase
 Status: Ready to plan
-Last activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
+Last activity: 2026-03-14 - Completed quick task 1: Final cleanup pass: fix malformed docs, tighten Apply contract, clarify static behavior wording, add irreversible history tests, optional polish
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -122,6 +122,12 @@ None yet.
 
 - Phase 2 flag: `Apply<S>` and `Traced<T>` trait bounds need validation against backgammon use case before finalizing
 - Phase 3 flag: Snapshot undo memory implications for long AI-heavy sessions — acceptable for MVP, flag for v0.5.x
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Final cleanup pass: fix malformed docs, tighten Apply contract, clarify static behavior wording, add irreversible history tests, optional polish | 2026-03-14 | 7a90157 | [1-final-cleanup-pass-fix-malformed-docs-ti](./quick/1-final-cleanup-pass-fix-malformed-docs-ti/) |
 
 ## Session Continuity
 
