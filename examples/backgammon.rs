@@ -15,7 +15,7 @@
 //! Run with: cargo run --example backgammon
 
 use herdingcats::{
-    Apply, Behavior, BehaviorResult, Engine, EngineError, EngineSpec, Frame,
+    Apply, BehaviorDef, BehaviorResult, Engine, EngineError, EngineSpec, Frame,
     HistoryDisallowed, Outcome, Reversibility,
 };
 
@@ -81,55 +81,33 @@ impl EngineSpec for BackgammonSpec {
 }
 
 // ---------------------------------------------------------------------------
-// Behaviors
+// Behavior evaluate functions
 // ---------------------------------------------------------------------------
 
-struct RollDiceBehavior;
-
-impl Behavior<BackgammonSpec> for RollDiceBehavior {
-    fn name(&self) -> &'static str {
-        "RollDice"
-    }
-    fn order_key(&self) -> u32 {
-        0
-    }
-    fn evaluate(
-        &self,
-        input: &BackgammonInput,
-        _state: &BackgammonState,
-    ) -> BehaviorResult<BackgammonDiff, String> {
-        match input {
-            BackgammonInput::RollDice { d1, d2 } => {
-                BehaviorResult::Continue(vec![BackgammonDiff::SetDice(*d1, *d2)])
-            }
-            BackgammonInput::MovePiece { .. } => BehaviorResult::Continue(vec![]),
+fn roll_dice_eval(
+    input: &BackgammonInput,
+    _state: &BackgammonState,
+) -> BehaviorResult<BackgammonDiff, String> {
+    match input {
+        BackgammonInput::RollDice { d1, d2 } => {
+            BehaviorResult::Continue(vec![BackgammonDiff::SetDice(*d1, *d2)])
         }
+        BackgammonInput::MovePiece { .. } => BehaviorResult::Continue(vec![]),
     }
 }
 
-struct MovePieceBehavior;
-
-impl Behavior<BackgammonSpec> for MovePieceBehavior {
-    fn name(&self) -> &'static str {
-        "MovePiece"
-    }
-    fn order_key(&self) -> u32 {
-        1
-    }
-    fn evaluate(
-        &self,
-        input: &BackgammonInput,
-        _state: &BackgammonState,
-    ) -> BehaviorResult<BackgammonDiff, String> {
-        match input {
-            BackgammonInput::MovePiece { from, to } => {
-                BehaviorResult::Continue(vec![BackgammonDiff::MoveWhite {
-                    from: *from,
-                    to: *to,
-                }])
-            }
-            BackgammonInput::RollDice { .. } => BehaviorResult::Continue(vec![]),
+fn move_piece_eval(
+    input: &BackgammonInput,
+    _state: &BackgammonState,
+) -> BehaviorResult<BackgammonDiff, String> {
+    match input {
+        BackgammonInput::MovePiece { from, to } => {
+            BehaviorResult::Continue(vec![BackgammonDiff::MoveWhite {
+                from: *from,
+                to: *to,
+            }])
         }
+        BackgammonInput::RollDice { .. } => BehaviorResult::Continue(vec![]),
     }
 }
 
@@ -194,7 +172,10 @@ fn main() {
 
     let mut engine = Engine::<BackgammonSpec>::new(
         initial_state,
-        vec![Box::new(RollDiceBehavior), Box::new(MovePieceBehavior)],
+        vec![
+            BehaviorDef { name: "RollDice",  order_key: 0, evaluate: roll_dice_eval },
+            BehaviorDef { name: "MovePiece", order_key: 1, evaluate: move_piece_eval },
+        ],
     );
 
     println!("=== HerdingCats: Backgammon Irreversibility Demo ===");

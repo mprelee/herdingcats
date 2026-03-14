@@ -7,7 +7,7 @@
 
 use std::borrow::Cow;
 use crate::spec::EngineSpec;
-use crate::behavior::{Behavior, BehaviorResult};
+use crate::behavior::{BehaviorDef, BehaviorResult};
 use crate::outcome::{EngineError, Frame, HistoryDisallowed, Outcome};
 use crate::reversibility::Reversibility;
 use crate::apply::Apply;
@@ -25,7 +25,7 @@ use crate::apply::Apply;
 /// # Example
 ///
 /// ```
-/// use herdingcats::{Engine, EngineSpec, Apply, Behavior, BehaviorResult, Reversibility};
+/// use herdingcats::{Engine, EngineSpec, Apply, BehaviorDef, BehaviorResult, Reversibility};
 ///
 /// struct MySpec;
 ///
@@ -48,22 +48,20 @@ use crate::apply::Apply;
 ///     type OrderKey = u32;
 /// }
 ///
-/// struct AppendBehavior;
-///
-/// impl Behavior<MySpec> for AppendBehavior {
-///     fn name(&self) -> &'static str { "append" }
-///     fn order_key(&self) -> u32 { 0 }
-///     fn evaluate(&self, input: &u8, _state: &Vec<u8>) -> BehaviorResult<AppendDiff, String> {
-///         BehaviorResult::Continue(vec![AppendDiff(*input)])
-///     }
+/// fn append_eval(input: &u8, _state: &Vec<u8>) -> BehaviorResult<AppendDiff, String> {
+///     BehaviorResult::Continue(vec![AppendDiff(*input)])
 /// }
 ///
-/// let engine = Engine::<MySpec>::new(vec![], vec![Box::new(AppendBehavior)]);
+/// let engine = Engine::<MySpec>::new(vec![], vec![BehaviorDef {
+///     name: "append",
+///     order_key: 0u32,
+///     evaluate: append_eval,
+/// }]);
 /// assert_eq!(engine.state(), &vec![]);
 /// ```
 pub struct Engine<E: EngineSpec> {
     state: E::State,
-    behaviors: Vec<Box<dyn Behavior<E>>>,
+    behaviors: Vec<BehaviorDef<E>>,
     undo_stack: Vec<(E::State, Frame<E>, Reversibility)>,
     redo_stack: Vec<(E::State, Frame<E>, Reversibility)>,
 }
@@ -73,11 +71,11 @@ impl<E: EngineSpec> Engine<E> {
     ///
     /// Behaviors are sorted once by `(order_key, name)` — deterministic total
     /// order, no address-based tiebreaking.
-    pub fn new(state: E::State, mut behaviors: Vec<Box<dyn Behavior<E>>>) -> Self {
+    pub fn new(state: E::State, mut behaviors: Vec<BehaviorDef<E>>) -> Self {
         behaviors.sort_by(|a, b| {
-            a.order_key()
-                .cmp(&b.order_key())
-                .then_with(|| a.name().cmp(b.name()))
+            a.order_key
+                .cmp(&b.order_key)
+                .then_with(|| a.name.cmp(b.name))
         });
         Engine {
             state,
@@ -132,7 +130,7 @@ impl<E: EngineSpec> Engine<E> {
         let mut traces: Vec<E::Trace> = Vec::new();
 
         for behavior in &self.behaviors {
-            match behavior.evaluate(&input, &*working) {
+            match (behavior.evaluate)(&input, &*working) {
                 BehaviorResult::Stop(outcome) => {
                     return Ok(outcome.into());
                 }
@@ -265,101 +263,58 @@ mod tests {
         }
     }
 
-    /// A behavior that records its name into State (as bytes) so we can verify
-    /// sort order by inspecting the committed state.
-    struct TracingBehavior {
-        key: u32,
-        behavior_name: &'static str,
-        /// The byte value to emit as a diff when evaluated.
-        diff_byte: u8,
+    // -----------------------------------------------------------------------
+    // Helper fn pointers replacing old struct+trait pattern
+    // -----------------------------------------------------------------------
+
+    fn tracing_10_eval(_input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![10u8])
     }
 
-    impl Behavior<TestSpec> for TracingBehavior {
-        fn name(&self) -> &'static str {
-            self.behavior_name
-        }
-
-        fn order_key(&self) -> u32 {
-            self.key
-        }
-
-        fn evaluate(&self, _input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
-            BehaviorResult::Continue(vec![self.diff_byte])
-        }
+    fn tracing_20_eval(_input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![20u8])
     }
 
-    /// A behavior that always emits no diffs (no-op).
-    struct NoOpBehavior;
-
-    impl Behavior<TestSpec> for NoOpBehavior {
-        fn name(&self) -> &'static str {
-            "noop"
-        }
-
-        fn order_key(&self) -> u32 {
-            0
-        }
-
-        fn evaluate(&self, _input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
-            BehaviorResult::Continue(vec![])
-        }
+    fn tracing_30_eval(_input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![30u8])
     }
 
-    /// A behavior that always calls Stop.
-    struct StopBehavior;
-
-    impl Behavior<TestSpec> for StopBehavior {
-        fn name(&self) -> &'static str {
-            "stopper"
-        }
-
-        fn order_key(&self) -> u32 {
-            0
-        }
-
-        fn evaluate(&self, _input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
-            BehaviorResult::Stop(NonCommittedOutcome::Aborted("halted".to_string()))
-        }
+    fn tracing_100_eval(_input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![100u8])
     }
 
-    /// A behavior that emits a diff equal to its input.
-    struct EchoBehavior {
-        key: u32,
-        behavior_name: &'static str,
+    fn tracing_200_eval(_input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![200u8])
     }
 
-    impl Behavior<TestSpec> for EchoBehavior {
-        fn name(&self) -> &'static str {
-            self.behavior_name
-        }
-
-        fn order_key(&self) -> u32 {
-            self.key
-        }
-
-        fn evaluate(&self, input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
-            BehaviorResult::Continue(vec![*input])
-        }
+    fn tracing_1_eval(_input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![1u8])
     }
 
-    /// A behavior that reads the current working state length and emits it as a diff,
-    /// allowing verification that later behaviors see earlier diffs applied.
-    struct StateReadingBehavior;
+    fn tracing_2_eval(_input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![2u8])
+    }
 
-    impl Behavior<TestSpec> for StateReadingBehavior {
-        fn name(&self) -> &'static str {
-            "state_reader"
-        }
+    fn tracing_5_eval(_input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![5u8])
+    }
 
-        fn order_key(&self) -> u32 {
-            10
-        }
+    fn noop_eval(_input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![])
+    }
 
-        fn evaluate(&self, _input: &u8, state: &Vec<u8>) -> BehaviorResult<u8, String> {
-            // Emit the current state length — if an earlier behavior applied a diff,
-            // this will be non-zero even if the initial state was empty.
-            BehaviorResult::Continue(vec![state.len() as u8])
-        }
+    fn stop_eval(_input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Stop(NonCommittedOutcome::Aborted("halted".to_string()))
+    }
+
+    fn echo_eval(input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![*input])
+    }
+
+    /// Reads the current working state length and emits it as a diff, allowing
+    /// verification that later behaviors see earlier diffs applied.
+    fn state_reading_eval(_input: &u8, state: &Vec<u8>) -> BehaviorResult<u8, String> {
+        BehaviorResult::Continue(vec![state.len() as u8])
     }
 
     // -----------------------------------------------------------------------
@@ -370,10 +325,10 @@ mod tests {
     fn engine_new_sorts_behaviors_by_order_key_then_name() {
         // Behaviors provided in out-of-order: keys [2, 0, 1], names ["c", "a", "b"]
         // Expected sort: (0,"a"), (1,"b"), (2,"c") → diff bytes [10, 20, 30]
-        let behaviors: Vec<Box<dyn Behavior<TestSpec>>> = vec![
-            Box::new(TracingBehavior { key: 2, behavior_name: "c", diff_byte: 30 }),
-            Box::new(TracingBehavior { key: 0, behavior_name: "a", diff_byte: 10 }),
-            Box::new(TracingBehavior { key: 1, behavior_name: "b", diff_byte: 20 }),
+        let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
+            BehaviorDef { name: "c", order_key: 2, evaluate: tracing_30_eval },
+            BehaviorDef { name: "a", order_key: 0, evaluate: tracing_10_eval },
+            BehaviorDef { name: "b", order_key: 1, evaluate: tracing_20_eval },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
@@ -409,7 +364,10 @@ mod tests {
     #[test]
     fn cow_no_clone_on_no_op_dispatch() {
         let initial: Vec<u8> = vec![1, 2, 3];
-        let mut engine = Engine::<TestSpec>::new(initial, vec![Box::new(NoOpBehavior)]);
+        let mut engine = Engine::<TestSpec>::new(
+            initial,
+            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+        );
 
         // Compare the inner heap buffer pointer — the allocation address — not the Vec
         // struct address. A no-op dispatch must not reallocate the state buffer.
@@ -431,7 +389,7 @@ mod tests {
         let initial: Vec<u8> = vec![1, 2, 3];
         let mut engine = Engine::<TestSpec>::new(
             initial,
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
 
         // Compare the inner heap buffer pointer. After a diff is applied, Cow clones
@@ -451,9 +409,9 @@ mod tests {
     #[test]
     fn dispatch_evaluates_in_deterministic_order() {
         // Two behaviors: key=1 emits 200, key=0 emits 100 → frame.diffs must be [100, 200].
-        let behaviors: Vec<Box<dyn Behavior<TestSpec>>> = vec![
-            Box::new(TracingBehavior { key: 1, behavior_name: "second", diff_byte: 200 }),
-            Box::new(TracingBehavior { key: 0, behavior_name: "first",  diff_byte: 100 }),
+        let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
+            BehaviorDef { name: "second", order_key: 1, evaluate: tracing_200_eval },
+            BehaviorDef { name: "first",  order_key: 0, evaluate: tracing_100_eval },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
@@ -466,13 +424,13 @@ mod tests {
 
     #[test]
     fn later_behavior_sees_earlier_diffs() {
-        // EchoBehavior (key=0) emits the input byte, appending it to state.
-        // StateReadingBehavior (key=10) reads the current state length and emits it.
-        // Initial state is empty; after EchoBehavior applies one diff, length == 1.
-        // So StateReadingBehavior should emit 1u8.
-        let behaviors: Vec<Box<dyn Behavior<TestSpec>>> = vec![
-            Box::new(EchoBehavior { key: 0, behavior_name: "echo" }),
-            Box::new(StateReadingBehavior),
+        // echo_eval (key=0) emits the input byte, appending it to state.
+        // state_reading_eval (key=10) reads the current state length and emits it.
+        // Initial state is empty; after echo applies one diff, length == 1.
+        // So state_reading_eval should emit 1u8.
+        let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
+            BehaviorDef { name: "echo",         order_key: 0,  evaluate: echo_eval },
+            BehaviorDef { name: "state_reader",  order_key: 10, evaluate: state_reading_eval },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(99u8, Reversibility::Reversible).unwrap();
@@ -481,7 +439,7 @@ mod tests {
             assert_eq!(frame.diffs.len(), 2);
             assert_eq!(frame.diffs[0], 99u8);
             assert_eq!(frame.diffs[1], 1u8,
-                "StateReadingBehavior must see state after EchoBehavior applied its diff");
+                "state_reading_eval must see state after echo applied its diff");
         } else {
             panic!("expected Committed");
         }
@@ -491,9 +449,9 @@ mod tests {
     fn trace_appended_at_diff_application() {
         // Each u8 diff emits "applied N" trace when applied.
         // Two diffs → two traces in the same order.
-        let behaviors: Vec<Box<dyn Behavior<TestSpec>>> = vec![
-            Box::new(TracingBehavior { key: 0, behavior_name: "first",  diff_byte: 10 }),
-            Box::new(TracingBehavior { key: 1, behavior_name: "second", diff_byte: 20 }),
+        let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
+            BehaviorDef { name: "first",  order_key: 0, evaluate: tracing_10_eval },
+            BehaviorDef { name: "second", order_key: 1, evaluate: tracing_20_eval },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
@@ -506,10 +464,10 @@ mod tests {
 
     #[test]
     fn stop_halts_dispatch() {
-        // StopBehavior (key=0) fires first and returns Stop. No frame should be committed.
-        let behaviors: Vec<Box<dyn Behavior<TestSpec>>> = vec![
-            Box::new(StopBehavior),
-            Box::new(EchoBehavior { key: 99, behavior_name: "echo" }),
+        // stop_eval (key=0) fires first and returns Stop. No frame should be committed.
+        let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
+            BehaviorDef { name: "stopper", order_key: 0,  evaluate: stop_eval },
+            BehaviorDef { name: "echo",    order_key: 99, evaluate: echo_eval },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
@@ -523,7 +481,10 @@ mod tests {
 
     #[test]
     fn no_frame_on_no_diffs() {
-        let mut engine = Engine::<TestSpec>::new(vec![], vec![Box::new(NoOpBehavior)]);
+        let mut engine = Engine::<TestSpec>::new(
+            vec![],
+            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+        );
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
         assert!(
             matches!(outcome, Outcome::NoChange),
@@ -535,7 +496,7 @@ mod tests {
     fn frame_contains_input_diffs_trace() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let outcome = engine
             .dispatch(77u8, Reversibility::Irreversible)
@@ -579,7 +540,7 @@ mod tests {
     fn committed_dispatch_increments_undo_depth() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.undo_depth(), 1);
@@ -591,7 +552,7 @@ mod tests {
     fn committed_dispatch_clears_redo_stack() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         // redo_depth must be 0 after a Committed dispatch (new timeline)
@@ -602,7 +563,7 @@ mod tests {
     fn irreversible_committed_dispatch_clears_both_stacks() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
@@ -618,15 +579,18 @@ mod tests {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
             vec![
-                Box::new(EchoBehavior { key: 0, behavior_name: "echo" }),
-                Box::new(NoOpBehavior),
+                BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval },
+                BehaviorDef { name: "noop", order_key: 1, evaluate: noop_eval },
             ],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         let ud = engine.undo_depth();
         let rd = engine.redo_depth();
         // Use a fresh noop-only engine to produce NoChange without touching stacks
-        let mut noop_engine = Engine::<TestSpec>::new(vec![], vec![Box::new(NoOpBehavior)]);
+        let mut noop_engine = Engine::<TestSpec>::new(
+            vec![],
+            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+        );
         let _ = noop_engine.dispatch(1u8, Reversibility::Reversible).unwrap(); // NoChange
         assert_eq!(noop_engine.undo_depth(), 0);
         assert_eq!(noop_engine.redo_depth(), 0);
@@ -665,7 +629,7 @@ mod tests {
     fn undo_restores_prior_state_and_returns_undone_frame() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let state_before = engine.state().clone();
         let outcome = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
@@ -686,7 +650,7 @@ mod tests {
     fn redo_restores_state_after_undo_and_returns_redone_frame() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let _ = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
         let state_after_dispatch = engine.state().clone();
@@ -703,7 +667,7 @@ mod tests {
     fn undo_depth_and_redo_depth_track_correctly() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         assert_eq!(engine.undo_depth(), 0);
         assert_eq!(engine.redo_depth(), 0);
@@ -733,7 +697,7 @@ mod tests {
     fn new_committed_dispatch_after_undo_clears_redo_stack() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
@@ -750,8 +714,8 @@ mod tests {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
             vec![
-                Box::new(EchoBehavior { key: 0, behavior_name: "echo" }),
-                Box::new(NoOpBehavior),
+                BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval },
+                BehaviorDef { name: "noop", order_key: 1, evaluate: noop_eval },
             ],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
@@ -759,21 +723,21 @@ mod tests {
         assert_eq!(engine.redo_depth(), 1);
 
         // Replace echo with noop-only engine to force NoChange
-        let mut engine2 = Engine::<TestSpec>::new(vec![], vec![Box::new(NoOpBehavior)]);
+        let mut engine2 = Engine::<TestSpec>::new(
+            vec![],
+            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+        );
         let _ = engine2.dispatch(1u8, Reversibility::Reversible).unwrap(); // NoChange (no diffs)
         // (redo depth was never populated, so assert on a fresh engine with setup)
 
         // Simpler test: dispatch + undo populates redo. NoChange after does NOT clear it.
-        // We need an engine that can produce both Committed and NoChange.
-        // Use a fresh engine, commit one, undo it (redo_depth=1), then NoChange dispatch.
-        let mut e = Engine::<TestSpec>::new(vec![], vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })]);
+        let mut e = Engine::<TestSpec>::new(
+            vec![],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+        );
         let _ = e.dispatch(1u8, Reversibility::Reversible).unwrap();
         let _ = e.undo().unwrap();
         assert_eq!(e.redo_depth(), 1);
-        // Replace behaviors to trigger NoChange: use an engine that NoOps.
-        // Since we can't easily swap behaviors mid-engine, rely on the contract:
-        // only Committed clears redo. This is enforced by code inspection + the
-        // new_committed_dispatch_after_undo_clears_redo_stack test above.
         // Structural test: ensure redo_depth is still 1 after calling undo on empty stack (which returns Disallowed, not Committed).
         let _ = e.undo().unwrap(); // NothingToUndo — does not clear redo
         assert_eq!(e.redo_depth(), 1, "Disallowed outcome must not clear redo stack");
@@ -784,7 +748,7 @@ mod tests {
         use crate::outcome::HistoryDisallowed;
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         // Build up some history.
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
@@ -811,7 +775,7 @@ mod tests {
         let initial_state = vec![10u8, 20u8, 30u8];
         let mut engine = Engine::<TestSpec>::new(
             initial_state.clone(),
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let _ = engine.dispatch(99u8, Reversibility::Reversible).unwrap();
         assert_ne!(engine.state(), &initial_state);
@@ -839,13 +803,13 @@ mod tests {
     #[test]
     fn invariant_02_dispatch_is_atomic() {
         // Invariant 2: Dispatch is atomic — if Stop fires, no prior diffs in that dispatch commit.
-        // StopBehavior fires first (order_key=0); EchoBehavior (order_key=99) never runs.
+        // stop_eval fires first (order_key=0); echo_eval (order_key=99) never runs.
         // State must remain identical to initial.
         let mut engine = Engine::<TestSpec>::new(
             vec![],
             vec![
-                Box::new(StopBehavior),
-                Box::new(EchoBehavior { key: 99, behavior_name: "echo" }),
+                BehaviorDef { name: "stopper", order_key: 0,  evaluate: stop_eval },
+                BehaviorDef { name: "echo",    order_key: 99, evaluate: echo_eval },
             ],
         );
         let before = engine.state().clone();
@@ -857,10 +821,9 @@ mod tests {
     #[test]
     fn invariant_03_behaviors_evaluated_in_deterministic_order() {
         // Invariant 3: Behaviors evaluated in (order_key, name) order.
-        // See also: engine_new_sorts_behaviors_by_order_key_then_name (deeper mechanism test).
-        let behaviors: Vec<Box<dyn Behavior<TestSpec>>> = vec![
-            Box::new(TracingBehavior { key: 1, behavior_name: "b", diff_byte: 2 }),
-            Box::new(TracingBehavior { key: 0, behavior_name: "a", diff_byte: 1 }),
+        let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
+            BehaviorDef { name: "b", order_key: 1, evaluate: tracing_2_eval },
+            BehaviorDef { name: "a", order_key: 0, evaluate: tracing_1_eval },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
@@ -875,19 +838,17 @@ mod tests {
     #[test]
     fn invariant_04_each_behavior_sees_only_current_working_state() {
         // Invariant 4: Each behavior sees the working state at its moment of evaluation.
-        // The working state is a CoW view of committed state + any diffs applied so far.
-        // StateReadingBehavior (key=10) reads state AFTER EchoBehavior (key=0) has applied its diff.
-        // See also: later_behavior_sees_earlier_diffs (mechanism test).
-        let behaviors: Vec<Box<dyn Behavior<TestSpec>>> = vec![
-            Box::new(EchoBehavior { key: 0, behavior_name: "echo" }),
-            Box::new(StateReadingBehavior),  // order_key=10
+        // state_reading_eval (key=10) reads state AFTER echo_eval (key=0) has applied its diff.
+        let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
+            BehaviorDef { name: "echo",        order_key: 0,  evaluate: echo_eval },
+            BehaviorDef { name: "state_reader", order_key: 10, evaluate: state_reading_eval },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(5u8, Reversibility::Reversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
-            // StateReadingBehavior emits state.len() after EchoBehavior added one element.
+            // state_reading_eval emits state.len() after echo added one element.
             assert_eq!(frame.diffs[1], 1u8,
-                "StateReadingBehavior must see working state with echo's diff already applied");
+                "state_reading_eval must see working state with echo's diff already applied");
         } else {
             panic!("expected Committed");
         }
@@ -896,17 +857,15 @@ mod tests {
     #[test]
     fn invariant_05_later_behaviors_see_earlier_applied_diffs() {
         // Invariant 5: Later behaviors see earlier applied diffs.
-        // Same setup as invariant_04 — confirmed by state length visible to StateReadingBehavior.
-        // (Thin assertion: same observable fact, explicit invariant numbering for auditability.)
-        let behaviors: Vec<Box<dyn Behavior<TestSpec>>> = vec![
-            Box::new(EchoBehavior { key: 0, behavior_name: "echo" }),
-            Box::new(StateReadingBehavior),
+        let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
+            BehaviorDef { name: "echo",        order_key: 0,  evaluate: echo_eval },
+            BehaviorDef { name: "state_reader", order_key: 10, evaluate: state_reading_eval },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(99u8, Reversibility::Reversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
             assert_eq!(frame.diffs.len(), 2,
-                "both behaviors must have contributed: echo emits input, state_reader emits state length");
+                "both behaviors must have contributed");
             assert_eq!(frame.diffs[1], 1u8,
                 "state_reader saw length=1 (echo's diff applied before state_reader ran)");
         } else {
@@ -917,13 +876,12 @@ mod tests {
     #[test]
     fn invariant_06_behaviors_do_not_mutate_state_directly() {
         // Invariant 6: Behaviors do not mutate state directly — structural guarantee.
-        // The Behavior<E> trait's evaluate() signature takes `&E::State` (shared reference).
-        // Direct mutation is impossible without unsafe. This test confirms the observable
-        // consequence: committed state is unchanged before the engine applies diffs.
-        // (Structural: enforced by &E::State borrow in evaluate() signature.)
+        // The evaluate fn pointer signature takes `&E::State` (shared reference).
         let initial = vec![7u8];
-        let engine = Engine::<TestSpec>::new(initial.clone(), vec![Box::new(NoOpBehavior)]);
-        // Before dispatch: state is initial (no behavior can have mutated it).
+        let engine = Engine::<TestSpec>::new(
+            initial.clone(),
+            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+        );
         assert_eq!(engine.state(), &initial,
             "committed state must be unchanged — behaviors receive &State, cannot mutate directly");
     }
@@ -931,11 +889,9 @@ mod tests {
     #[test]
     fn invariant_07_engine_applies_diffs_centrally() {
         // Invariant 7: The engine applies diffs centrally (not behaviors).
-        // EchoBehavior returns diffs; Apply<TestSpec> for u8 pushes to Vec<u8>.
-        // The resulting state reflects centrally applied diffs, not behavior side effects.
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let _ = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.state(), &vec![42u8],
@@ -945,11 +901,9 @@ mod tests {
     #[test]
     fn invariant_08_diff_that_mutates_state_appends_trace() {
         // Invariant 8: Any diff that mutates state must append at least one trace entry.
-        // Apply<TestSpec> for u8: pushes to state AND returns vec!["applied N"].
-        // Verify: diffs.len() == traces.len() for single-behavior dispatch.
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(TracingBehavior { key: 0, behavior_name: "t", diff_byte: 5 })],
+            vec![BehaviorDef { name: "t", order_key: 0, evaluate: tracing_5_eval }],
         );
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
@@ -965,11 +919,9 @@ mod tests {
     #[test]
     fn invariant_09_trace_generated_in_execution_order() {
         // Invariant 9: Trace is generated in execution order, not reconstructed later.
-        // Two behaviors in sorted order: (0,"first") emits 10, (1,"second") emits 20.
-        // Traces must appear in the same order as diff application.
-        let behaviors: Vec<Box<dyn Behavior<TestSpec>>> = vec![
-            Box::new(TracingBehavior { key: 0, behavior_name: "first",  diff_byte: 10 }),
-            Box::new(TracingBehavior { key: 1, behavior_name: "second", diff_byte: 20 }),
+        let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
+            BehaviorDef { name: "first",  order_key: 0, evaluate: tracing_10_eval },
+            BehaviorDef { name: "second", order_key: 1, evaluate: tracing_20_eval },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
@@ -986,15 +938,17 @@ mod tests {
     #[test]
     fn invariant_10_only_non_empty_transitions_produce_frames() {
         // Invariant 10: Only successful, non-empty transitions produce frames.
-        // Zero diffs → NoChange (no frame). One diff → Committed(frame).
-        let mut noop_engine = Engine::<TestSpec>::new(vec![], vec![Box::new(NoOpBehavior)]);
+        let mut noop_engine = Engine::<TestSpec>::new(
+            vec![],
+            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+        );
         let noop_outcome = noop_engine.dispatch(0u8, Reversibility::Reversible).unwrap();
         assert!(matches!(noop_outcome, Outcome::NoChange),
             "zero diffs must return NoChange, not a frame");
 
         let mut echo_engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let echo_outcome = echo_engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         assert!(matches!(echo_outcome, Outcome::Committed(_)),
@@ -1004,12 +958,11 @@ mod tests {
     #[test]
     fn invariant_11_non_committed_outcomes_do_not_modify_committed_state() {
         // Invariant 11: Non-committed outcomes do not modify visible committed state.
-        // NoChange path: state unchanged. Aborted path: state unchanged.
         let mut engine = Engine::<TestSpec>::new(
             vec![10u8],
             vec![
-                Box::new(StopBehavior),
-                Box::new(EchoBehavior { key: 99, behavior_name: "echo" }),
+                BehaviorDef { name: "stopper", order_key: 0,  evaluate: stop_eval },
+                BehaviorDef { name: "echo",    order_key: 99, evaluate: echo_eval },
             ],
         );
         let before = engine.state().clone();
@@ -1020,7 +973,10 @@ mod tests {
             "Aborted dispatch must not modify committed state");
 
         // NoChange — state must still be unchanged
-        let mut noop_engine = Engine::<TestSpec>::new(vec![10u8], vec![Box::new(NoOpBehavior)]);
+        let mut noop_engine = Engine::<TestSpec>::new(
+            vec![10u8],
+            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+        );
         let before2 = noop_engine.state().clone();
         let _ = noop_engine.dispatch(0u8, Reversibility::Reversible).unwrap();
         assert_eq!(noop_engine.state(), &before2,
@@ -1030,13 +986,9 @@ mod tests {
     #[test]
     fn invariant_12_behavior_state_lives_in_main_state_tree() {
         // Invariant 12: Behavior state lives inside the main state tree (not engine internals).
-        // Structural guarantee: behaviors are zero-size structs; any state they need is in E::State.
-        // Observable consequence: undo restores ALL state including behavior-local state.
-        // (Thin test — the snapshot-based undo mechanism enforces this structurally.)
-        // undo_snapshot_is_exact_no_reversible_trait_required provides deeper coverage.
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let initial = engine.state().clone();
         let _ = engine.dispatch(5u8, Reversibility::Reversible).unwrap();
@@ -1050,11 +1002,9 @@ mod tests {
     #[test]
     fn invariant_13_undo_redo_operate_on_canonical_stored_frames() {
         // Invariant 13: Undo/redo operate on canonical stored frames — not re-dispatch.
-        // The frame returned by undo() must be identical to the frame from the original dispatch.
-        // (No re-running of behaviors.)
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let dispatch_outcome = engine.dispatch(77u8, Reversibility::Reversible).unwrap();
         let committed_frame = if let Outcome::Committed(f) = dispatch_outcome { f }
@@ -1071,11 +1021,9 @@ mod tests {
     #[test]
     fn invariant_14_irreversible_transitions_designated_by_library_user() {
         // Invariant 14: Irreversible transitions are designated by the library user (not the engine).
-        // The engine's dispatch() takes Reversibility as an explicit caller parameter.
-        // Structural: callers cannot omit it. Observable: Irreversible clears both stacks.
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.undo_depth(), 1);
@@ -1092,20 +1040,13 @@ mod tests {
     fn invariant_15_engine_errors_distinct_from_normal_outcomes() {
         // Invariant 15: Engine errors (EngineError) are distinct from normal rejected or
         // aborted dispatch outcomes (Outcome variants).
-        // Structural: dispatch returns Result<Outcome<F,N>, EngineError>.
-        // The types are distinct — Outcome is the Ok variant, EngineError is the Err variant.
-        // Observable: normal operations return Ok(_), never Err(_) in the MVP.
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
         );
         let result = engine.dispatch(1u8, Reversibility::Reversible);
-        // dispatch returns Result<Outcome<...>, EngineError>
-        // If it returned Ok, the engine did not malfunction — Outcome variants are not EngineError.
         assert!(result.is_ok(),
             "normal dispatch must return Ok(Outcome), not Err(EngineError)");
-        // The types are statically distinct — EngineError cannot be pattern-matched as Outcome.
-        // (Structural: enforced by the Rust type system.)
     }
 
     // -----------------------------------------------------------------------
@@ -1113,8 +1054,6 @@ mod tests {
     // -----------------------------------------------------------------------
 
     // Suite 1 — Determinism
-    // Same input sequence applied to two identically-constructed engines always
-    // produces the same committed state. Validates ARCHITECTURE.md §"Deterministic Ordering".
     proptest! {
         #[test]
         fn prop_dispatch_is_deterministic(
@@ -1122,11 +1061,11 @@ mod tests {
         ) {
             let mut engine1 = Engine::<TestSpec>::new(
                 vec![],
-                vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+                vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
             );
             let mut engine2 = Engine::<TestSpec>::new(
                 vec![],
-                vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+                vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
             );
             for &input in &inputs {
                 let _ = engine1.dispatch(input, Reversibility::Reversible);
@@ -1141,13 +1080,6 @@ mod tests {
     }
 
     /// Suite 2 — Undo/Redo Correctness
-    ///
-    /// After any arbitrary sequence of dispatch/undo/redo operations, the engine
-    /// must never panic and must maintain structural consistency:
-    ///   - undo_depth() + redo_depth() accounts for committed dispatches minus undone ones
-    ///   - state() is coherent (no corruption)
-    ///
-    /// Uses an Op enum strategy to generate mixed operation sequences.
     #[allow(dead_code)]
     #[derive(Debug, Clone)]
     enum Op {
@@ -1171,7 +1103,7 @@ mod tests {
         ) {
             let mut engine = Engine::<TestSpec>::new(
                 vec![],
-                vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+                vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
             );
 
             // Apply all ops — engine must never panic
@@ -1190,7 +1122,6 @@ mod tests {
             }
 
             // Structural consistency: undo to bottom and verify we reach initial state.
-            // Undo everything on the undo stack.
             let undo_depth = engine.undo_depth();
             for _ in 0..undo_depth {
                 let _ = engine.undo();

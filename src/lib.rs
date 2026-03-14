@@ -6,8 +6,8 @@
 //! ## Quick Start
 //!
 //! 1. Define your game types and bundle them into an [`EngineSpec`] impl.
-//! 2. Implement [`Behavior`] for each rule in your game.
-//! 3. Construct an `Engine` (Phase 2) and call `dispatch(input, reversibility)`.
+//! 2. Define [`BehaviorDef`] entries — plain structs with fn pointer fields.
+//! 3. Construct an [`Engine`] and call `dispatch(input, reversibility)`.
 //!
 //! All public types are re-exported at the crate root.
 
@@ -19,7 +19,7 @@ mod reversibility;
 mod engine;
 
 pub use crate::spec::EngineSpec;
-pub use crate::behavior::{Behavior, BehaviorResult};
+pub use crate::behavior::{BehaviorDef, BehaviorResult};
 pub use crate::outcome::{EngineError, Frame, HistoryDisallowed, NonCommittedOutcome, Outcome};
 pub use crate::apply::Apply;
 pub use crate::reversibility::Reversibility;

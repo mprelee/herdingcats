@@ -3,7 +3,7 @@
 // This file is a tutorial-quality example of the full HerdingCats public API.
 // Read it top-to-bottom to understand how to:
 //   - Define game types and implement EngineSpec
-//   - Implement Behavior for each game rule
+//   - Define BehaviorDef entries with fn pointer fields for each game rule
 //   - Implement Apply for your Diff type
 //   - Use Engine::dispatch, Engine::undo, and Engine::redo
 //   - Handle all 7 Outcome variants exhaustively
@@ -11,14 +11,14 @@
 // Run with: cargo run --example tictactoe
 
 use herdingcats::{
-    Apply, Behavior, BehaviorResult, Engine, EngineError, EngineSpec, Frame, HistoryDisallowed,
+    Apply, BehaviorDef, BehaviorResult, Engine, EngineError, EngineSpec, Frame, HistoryDisallowed,
     NonCommittedOutcome, Outcome, Reversibility,
 };
 
 // ── Game spec ────────────────────────────────────────────────────────────────
 
 /// Unit struct that bundles all associated types for the tic-tac-toe game.
-/// This is the single type parameter you thread through Engine, Behavior, Apply, etc.
+/// This is the single type parameter you thread through Engine, BehaviorDef, Apply, etc.
 struct TicTacToeSpec;
 
 // ── Game types ────────────────────────────────────────────────────────────────
@@ -100,158 +100,98 @@ impl EngineSpec for TicTacToeSpec {
     type OrderKey = u32;
 }
 
-// ── Behaviors: the game rules, evaluated in order_key order ──────────────────
+// ── Behavior evaluate functions ───────────────────────────────────────────────
 
 /// Behavior 1 (order 0): Guard against moves after the game ends.
-/// Returns Stop(NonCommittedOutcome::Disallowed) if game_over is true → produces Disallowed in dispatch.
-struct ValidateTurn;
-
-impl Behavior<TicTacToeSpec> for ValidateTurn {
-    fn name(&self) -> &'static str {
-        "ValidateTurn"
-    }
-    fn order_key(&self) -> u32 {
-        0
-    }
-    fn evaluate(
-        &self,
-        _input: &TicTacToeInput,
-        state: &TicTacToeState,
-    ) -> BehaviorResult<TicTacToeDiff, String> {
-        if state.game_over {
-            BehaviorResult::Stop(NonCommittedOutcome::Disallowed("game is over".to_string()))
-        } else {
-            BehaviorResult::Continue(vec![])
-        }
+/// Returns Stop(NonCommittedOutcome::Disallowed) if game_over is true.
+fn validate_turn(
+    _input: &TicTacToeInput,
+    state: &TicTacToeState,
+) -> BehaviorResult<TicTacToeDiff, String> {
+    if state.game_over {
+        BehaviorResult::Stop(NonCommittedOutcome::Disallowed("game is over".to_string()))
+    } else {
+        BehaviorResult::Continue(vec![])
     }
 }
 
 /// Behavior 2 (order 1): Validate that the target cell exists and is empty.
 /// Out-of-bounds → InvalidInput (structurally malformed input).
 /// Cell occupied → Disallowed (valid input, rejected by rule).
-struct ValidateCell;
-
-impl Behavior<TicTacToeSpec> for ValidateCell {
-    fn name(&self) -> &'static str {
-        "ValidateCell"
+fn validate_cell(
+    input: &TicTacToeInput,
+    state: &TicTacToeState,
+) -> BehaviorResult<TicTacToeDiff, String> {
+    let TicTacToeInput::Place { row, col } = input;
+    if *row > 2 || *col > 2 {
+        return BehaviorResult::Stop(NonCommittedOutcome::InvalidInput("out of bounds".to_string()));
     }
-    fn order_key(&self) -> u32 {
-        1
+    if state.board[*row][*col].is_some() {
+        return BehaviorResult::Stop(NonCommittedOutcome::Disallowed("cell already occupied".to_string()));
     }
-    fn evaluate(
-        &self,
-        input: &TicTacToeInput,
-        state: &TicTacToeState,
-    ) -> BehaviorResult<TicTacToeDiff, String> {
-        let TicTacToeInput::Place { row, col } = input;
-        if *row > 2 || *col > 2 {
-            return BehaviorResult::Stop(NonCommittedOutcome::InvalidInput("out of bounds".to_string()));
-        }
-        if state.board[*row][*col].is_some() {
-            return BehaviorResult::Stop(NonCommittedOutcome::Disallowed("cell already occupied".to_string()));
-        }
-        BehaviorResult::Continue(vec![])
-    }
+    BehaviorResult::Continue(vec![])
 }
 
 /// Behavior 3 (order 2): Place the current player's marker and switch turns.
 /// Emits PlaceMarker + SwitchPlayer diffs.
-struct PlaceMarker;
+fn place_marker(
+    input: &TicTacToeInput,
+    state: &TicTacToeState,
+) -> BehaviorResult<TicTacToeDiff, String> {
+    let TicTacToeInput::Place { row, col } = input;
+    BehaviorResult::Continue(vec![
+        TicTacToeDiff::PlaceMarker {
+            row: *row,
+            col: *col,
+            player: state.current_player.clone(),
+        },
+        TicTacToeDiff::SwitchPlayer,
+    ])
+}
 
-impl Behavior<TicTacToeSpec> for PlaceMarker {
-    fn name(&self) -> &'static str {
-        "PlaceMarker"
+fn has_winner(board: &[[Option<Player>; 3]; 3], player: &Player) -> bool {
+    // Rows
+    for row_cells in board.iter() {
+        if row_cells.iter().all(|cell| cell.as_ref() == Some(player)) {
+            return true;
+        }
     }
-    fn order_key(&self) -> u32 {
-        2
+    // Columns
+    for col in 0..3usize {
+        if board.iter().all(|row_cells| row_cells[col].as_ref() == Some(player)) {
+            return true;
+        }
     }
-    fn evaluate(
-        &self,
-        input: &TicTacToeInput,
-        state: &TicTacToeState,
-    ) -> BehaviorResult<TicTacToeDiff, String> {
-        let TicTacToeInput::Place { row, col } = input;
-        BehaviorResult::Continue(vec![
-            TicTacToeDiff::PlaceMarker {
-                row: *row,
-                col: *col,
-                player: state.current_player.clone(),
-            },
-            TicTacToeDiff::SwitchPlayer,
-        ])
+    // Diagonals
+    if (0..3).all(|i| board[i][i].as_ref() == Some(player)) {
+        return true;
     }
+    if (0..3).all(|i| board[i][2 - i].as_ref() == Some(player)) {
+        return true;
+    }
+    false
 }
 
 /// Behavior 4 (order 3): Check for a winning position after placement.
 /// If 3-in-a-row found, emits SetGameOver diff (committed atomically with the move).
-/// Uses Continue([SetGameOver]) so the win is committed — not Aborted.
-struct CheckWin;
+fn check_win(
+    input: &TicTacToeInput,
+    state: &TicTacToeState,
+) -> BehaviorResult<TicTacToeDiff, String> {
+    // Check both players — PlaceMarker has already been accumulated but not yet applied.
+    // Behaviors evaluate against the PRE-APPLY state. We use the input to find the
+    // target cell and simulate the board state after placement.
+    let placing_player = &state.current_player;
+    let TicTacToeInput::Place { row, col } = input;
 
-impl CheckWin {
-    fn has_winner(board: &[[Option<Player>; 3]; 3], player: &Player) -> bool {
-        // Rows
-        for row_cells in board.iter() {
-            if row_cells.iter().all(|cell| cell.as_ref() == Some(player)) {
-                return true;
-            }
-        }
-        // Columns
-        for col in 0..3usize {
-            if board.iter().all(|row_cells| row_cells[col].as_ref() == Some(player)) {
-                return true;
-            }
-        }
-        // Diagonals
-        if (0..3).all(|i| board[i][i].as_ref() == Some(player)) {
-            return true;
-        }
-        if (0..3).all(|i| board[i][2 - i].as_ref() == Some(player)) {
-            return true;
-        }
-        false
-    }
-}
+    // Build a hypothetical board with the marker placed
+    let mut hypothetical = state.board.clone();
+    hypothetical[*row][*col] = Some(placing_player.clone());
 
-impl Behavior<TicTacToeSpec> for CheckWin {
-    fn name(&self) -> &'static str {
-        "CheckWin"
-    }
-    fn order_key(&self) -> u32 {
-        3
-    }
-    fn evaluate(
-        &self,
-        _input: &TicTacToeInput,
-        state: &TicTacToeState,
-    ) -> BehaviorResult<TicTacToeDiff, String> {
-        // Check both players — PlaceMarker has already been applied to state
-        // by the time the diffs are accumulated, but note: behaviors evaluate
-        // against the CURRENT (pre-apply) state. We check who just moved:
-        // current_player has already been switched by SwitchPlayer diff... wait,
-        // behaviors evaluate against state BEFORE diffs are applied. So
-        // current_player is the player who is ABOUT to move (or just moved in
-        // the PlaceMarker diff). Since diffs haven't been applied yet, we check
-        // the player who IS current_player (who is placing the marker now).
-        let placing_player = &state.current_player;
-        // Simulate the PlaceMarker diff to check the board AFTER placement
-        // by reading input — we need the target cell
-        // Actually: CheckWin runs AFTER PlaceMarker in the behavior chain, but
-        // behaviors evaluate against the PRE-APPLY state. The board doesn't
-        // have the marker yet. We need the input to know WHERE the marker goes.
-        // However, we don't have access to the input cell here in a simple way
-        // without re-reading TicTacToeInput. We DO have access to _input:
-        // let's use it.
-        let TicTacToeInput::Place { row, col } = _input;
-
-        // Build a hypothetical board with the marker placed
-        let mut hypothetical = state.board.clone();
-        hypothetical[*row][*col] = Some(placing_player.clone());
-
-        if CheckWin::has_winner(&hypothetical, placing_player) {
-            BehaviorResult::Continue(vec![TicTacToeDiff::SetGameOver])
-        } else {
-            BehaviorResult::Continue(vec![])
-        }
+    if has_winner(&hypothetical, placing_player) {
+        BehaviorResult::Continue(vec![TicTacToeDiff::SetGameOver])
+    } else {
+        BehaviorResult::Continue(vec![])
     }
 }
 
@@ -357,11 +297,11 @@ fn main() {
 
     // Build the engine with 4 behaviors.
     // Behaviors are sorted by (order_key, name) — evaluation order is deterministic.
-    let behaviors: Vec<Box<dyn Behavior<TicTacToeSpec>>> = vec![
-        Box::new(ValidateTurn),   // order 0 — guard game_over
-        Box::new(ValidateCell),   // order 1 — bounds + occupied check
-        Box::new(PlaceMarker),    // order 2 — emit placement diffs
-        Box::new(CheckWin),       // order 3 — detect win
+    let behaviors: Vec<BehaviorDef<TicTacToeSpec>> = vec![
+        BehaviorDef { name: "ValidateTurn",  order_key: 0, evaluate: validate_turn },
+        BehaviorDef { name: "ValidateCell",  order_key: 1, evaluate: validate_cell },
+        BehaviorDef { name: "PlaceMarker",   order_key: 2, evaluate: place_marker },
+        BehaviorDef { name: "CheckWin",      order_key: 3, evaluate: check_win },
     ];
     let mut engine = Engine::<TicTacToeSpec>::new(TicTacToeState::default(), behaviors);
 
@@ -417,8 +357,7 @@ fn main() {
     // ── Step 7: NoChange via a fresh zero-behavior engine ────────────────────
     //
     // NoChange is produced when all behaviors return Continue([]) with no diffs.
-    // We demonstrate it with a minimal engine that has no behaviors at all —
-    // an empty diff list means nothing changed.
+    // We demonstrate it with a minimal engine that has no behaviors at all.
     println!("Step 7: NoChange — dispatch into an engine with no behaviors");
     println!("  [demonstrates: NoChange — zero diffs from all behaviors]");
     {
@@ -456,7 +395,6 @@ fn main() {
     // ── Step 10: undo on empty stack — Disallowed ────────────────────────────
     //
     // We demonstrate Disallowed by undoing past the beginning of history.
-    // First undo all moves in the main engine, then try one more.
     println!("Step 10: Exhaust undo stack  [demonstrates: Disallowed(NothingToUndo)]");
     println!("  (draining undo stack...)");
     while engine.undo_depth() > 0 {
