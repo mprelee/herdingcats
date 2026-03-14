@@ -16,6 +16,7 @@ mod behavior;
 mod outcome;
 mod apply;
 mod reversibility;
+mod engine;
 
 pub use crate::spec::EngineSpec;
 pub use crate::behavior::{Behavior, BehaviorResult};
