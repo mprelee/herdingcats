@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: milestone
 status: planning
-stopped_at: Phase 3 context gathered
-last_updated: "2026-03-14T01:07:21.448Z"
+stopped_at: Completed 03-history/03-01-PLAN.md
+last_updated: "2026-03-14T01:19:52.724Z"
 last_activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 7
+  completed_plans: 6
   percent: 0
 ---
 
@@ -55,6 +55,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02-dispatch P01 | 2min | 2 tasks | 3 files |
 | Phase 02-dispatch P02 | 15min | 2 tasks | 5 files |
 | Phase 02-dispatch P03 | 2min | 2 tasks | 2 files |
+| Phase 03-history P01 | 5 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,7 @@ Recent decisions affecting current work:
 - [Phase 02-dispatch]: apply::tests::TestSpec::Diff changed to AppendByte — existing concrete Apply implementor in that module
 - [Phase 02-dispatch]: CoW pointer test uses Vec::as_ptr() (heap buffer address) not &Vec (field address) — field address never changes between dispatches
 - [Phase 02-dispatch]: Apply trait must be explicitly imported in engine.rs (use crate::apply::Apply) for diff.apply() method call resolution even with Apply<E> bound on EngineSpec::Diff
+- [Phase 03-history]: HistoryDisallowed not #[non_exhaustive] — NothingToUndo and NothingToRedo are the complete stable public API
 
 ### Pending Todos
 
@@ -89,6 +91,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T01:07:21.447Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-history/03-CONTEXT.md
+Last session: 2026-03-14T01:19:52.722Z
+Stopped at: Completed 03-history/03-01-PLAN.md
+Resume file: None
