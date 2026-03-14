@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: milestone
 status: planning
-stopped_at: Completed 04-examples-and-tests-02-PLAN.md
-last_updated: "2026-03-14T02:04:09.830Z"
+stopped_at: Completed 04-examples-and-tests-01-PLAN.md
+last_updated: "2026-03-14T02:04:53.308Z"
 last_activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 9
   percent: 0
 ---
 
@@ -58,6 +58,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 03-history P01 | 5 | 1 tasks | 2 files |
 | Phase 03-history P02 | 5min | 2 tasks | 2 files |
 | Phase 04-examples-and-tests P02 | 1min | 1 tasks | 1 files |
+| Phase 04-examples-and-tests P01 | 2min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -86,6 +87,8 @@ Recent decisions affecting current work:
 - [Phase 03-history]: Irreversible dispatch order: push to undo_stack then clear both stacks — state change commits, all history erased
 - [Phase 04-examples-and-tests]: All behaviors return Continue([]) for inputs they don't handle — no abort/abort-early short circuit needed in simple demos
 - [Phase 04-examples-and-tests]: BackgammonState.black_pos uses #[allow(dead_code)] — kept for domain clarity even though not exercised in the demo
+- [Phase 04-examples-and-tests]: CheckWin reads _input to simulate post-placement board state since behaviors evaluate pre-apply
+- [Phase 04-examples-and-tests]: NoChange demonstrated via zero-behavior engine — cleanest approach for 4-behavior game loop
 
 ### Pending Todos
 
@@ -98,6 +101,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T02:04:09.828Z
-Stopped at: Completed 04-examples-and-tests-02-PLAN.md
+Last session: 2026-03-14T02:04:53.306Z
+Stopped at: Completed 04-examples-and-tests-01-PLAN.md
 Resume file: None

@@ -29,7 +29,7 @@
 
 ### Examples
 
-- [ ] **EXAM-01**: Tic-tac-toe example compiles and runs, demonstrating dispatch, all outcome variants, and undo/redo
+- [x] **EXAM-01**: Tic-tac-toe example compiles and runs, demonstrating dispatch, all outcome variants, and undo/redo
 - [x] **EXAM-02**: Backgammon example compiles and runs, demonstrating dice-roll irreversibility clearing undo history
 
 ### Testing
@@ -80,7 +80,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HIST-02 | Phase 3 | Complete |
 | HIST-03 | Phase 3 | Complete |
 | HIST-04 | Phase 3 | Complete |
-| EXAM-01 | Phase 4 | Pending |
+| EXAM-01 | Phase 4 | Complete |
 | EXAM-02 | Phase 4 | Complete |
 | TEST-01 | Phase 4 | Pending |
 | TEST-02 | Phase 4 | Pending |
