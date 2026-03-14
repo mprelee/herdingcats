@@ -12,7 +12,7 @@ v0.5.0 is a clean reimplementation of HerdingCats on the `maddie-edits` branch, 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Core Types** - Define all public type contracts, traits, and enums that the entire library depends on
+- [x] **Phase 1: Core Types** - Define all public type contracts, traits, and enums that the entire library depends on (completed 2026-03-14)
 - [ ] **Phase 2: Dispatch** - Implement CoW working state and the ordered, atomic dispatch algorithm
 - [ ] **Phase 3: History** - Implement undo/redo with snapshot strategy and irreversibility boundary
 - [ ] **Phase 4: Examples and Tests** - Implement tic-tac-toe and backgammon examples; write unit and property tests
@@ -76,7 +76,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Types | 1/2 | In Progress|  |
+| 1. Core Types | 2/2 | Complete   | 2026-03-14 |
 | 2. Dispatch | 0/? | Not started | - |
 | 3. History | 0/? | Not started | - |
 | 4. Examples and Tests | 0/? | Not started | - |

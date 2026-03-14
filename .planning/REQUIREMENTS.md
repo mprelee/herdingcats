@@ -8,10 +8,10 @@
 ### Core Types
 
 - [x] **CORE-01**: Library user can define engine type params via a single `EngineSpec` trait (bundles S, I, D, T, O, K)
-- [ ] **CORE-02**: Library user can implement `Behavior` trait with `name() -> &'static str`, `order_key() -> K`, `evaluate(&I, &S) -> BehaviorResult<D, O>`
-- [ ] **CORE-03**: `BehaviorResult<D, O>` provides `Continue(Vec<D>)` and `Stop(O)` variants
-- [ ] **CORE-04**: `Outcome<F, N>` enum provides `Committed(F)`, `Undone(F)`, `Redone(F)`, `NoChange`, `InvalidInput(N)`, `Disallowed(N)`, `Aborted(N)`
-- [ ] **CORE-05**: `EngineError` is distinct from `Outcome` — reserved for engine-internal failures only
+- [x] **CORE-02**: Library user can implement `Behavior` trait with `name() -> &'static str`, `order_key() -> K`, `evaluate(&I, &S) -> BehaviorResult<D, O>`
+- [x] **CORE-03**: `BehaviorResult<D, O>` provides `Continue(Vec<D>)` and `Stop(O)` variants
+- [x] **CORE-04**: `Outcome<F, N>` enum provides `Committed(F)`, `Undone(F)`, `Redone(F)`, `NoChange`, `InvalidInput(N)`, `Disallowed(N)`, `Aborted(N)`
+- [x] **CORE-05**: `EngineError` is distinct from `Outcome` — reserved for engine-internal failures only
 
 ### Dispatch
 
@@ -68,10 +68,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CORE-01 | Phase 1 | Complete |
-| CORE-02 | Phase 1 | Pending |
-| CORE-03 | Phase 1 | Pending |
-| CORE-04 | Phase 1 | Pending |
-| CORE-05 | Phase 1 | Pending |
+| CORE-02 | Phase 1 | Complete |
+| CORE-03 | Phase 1 | Complete |
+| CORE-04 | Phase 1 | Complete |
+| CORE-05 | Phase 1 | Complete |
 | DISP-01 | Phase 2 | Pending |
 | DISP-02 | Phase 2 | Pending |
 | DISP-03 | Phase 2 | Pending |
