@@ -45,7 +45,12 @@ Plans:
   3. `WorkingState<S>` does not clone committed state until the first diff is applied — confirmed by inserting a counter or inspection in a test
   4. `Frame<I, D, T>` is committed atomically: if dispatch produces no diffs, no frame is written and `NoChange` is returned
   5. Callers must pass an explicit `Reversibility` argument to `dispatch()` — the compiler rejects calls that omit it
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — Apply trait + Reversibility enum (DISP-01, DISP-04)
+- [ ] 02-02-PLAN.md — Update Frame<E> Vec fields + Apply bound on EngineSpec::Diff (DISP-01, DISP-03)
+- [ ] 02-03-PLAN.md — Engine struct, new(), state(), dispatch() (DISP-01, DISP-02, DISP-03, DISP-04)
 
 ### Phase 3: History
 **Goal**: Callers can undo and redo transitions, and committing an irreversible input permanently clears history
@@ -77,6 +82,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Types | 2/2 | Complete    | 2026-03-14 |
-| 2. Dispatch | 0/? | Not started | - |
+| 2. Dispatch | 0/3 | Not started | - |
 | 3. History | 0/? | Not started | - |
 | 4. Examples and Tests | 0/? | Not started | - |
