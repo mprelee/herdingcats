@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: milestone
 status: planning
-stopped_at: Phase 5 context gathered
-last_updated: "2026-03-14T02:35:45.054Z"
+stopped_at: Completed 05-architecture-alignment 05-01-PLAN.md
+last_updated: "2026-03-14T02:57:02.162Z"
 last_activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 13
+  completed_plans: 11
   percent: 0
 ---
 
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04-examples-and-tests P02 | 1min | 1 tasks | 1 files |
 | Phase 04-examples-and-tests P01 | 2min | 1 tasks | 1 files |
 | Phase 04-examples-and-tests P03 | 3min | 2 tasks | 1 files |
+| Phase 05-architecture-alignment P01 | 4min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,9 @@ Recent decisions affecting current work:
 - [Phase 04-examples-and-tests]: NoChange demonstrated via zero-behavior engine — cleanest approach for 4-behavior game loop
 - [Phase 04-examples-and-tests]: Doc comments before proptest! macro converted to regular comments — rustdoc warns on /// before macro invocations
 - [Phase 04-examples-and-tests]: Op enum annotated with #[allow(dead_code)] — enum variants used only inside proptest! macro body, not detected by lint
+- [Phase 05-01]: NonCommittedOutcome lives in outcome.rs (not behavior.rs) to avoid circular deps — behavior.rs imports from outcome.rs
+- [Phase 05-01]: From<NonCommittedOutcome<N>> for Outcome<F, N> enables dispatch Stop arm to use outcome.into() with no hardcoded Aborted coercion
+- [Phase 05-01]: BehaviorResult type param renamed O→N for consistency with Outcome<F, N> naming; Stop variant now wraps NonCommittedOutcome<N>
 
 ### Roadmap Evolution
 
@@ -108,6 +112,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T02:35:45.052Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-architecture-alignment/05-CONTEXT.md
+Last session: 2026-03-14T02:57:02.160Z
+Stopped at: Completed 05-architecture-alignment 05-01-PLAN.md
+Resume file: None
