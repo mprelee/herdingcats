@@ -24,8 +24,8 @@
 
 - [x] **HIST-01**: `undo()` returns `Result<Outcome, EngineError>` with `Undone(frame)` or `Disallowed(NothingToUndo)`
 - [x] **HIST-02**: `redo()` returns `Result<Outcome, EngineError>` with `Redone(frame)` or `Disallowed(NothingToRedo)`
-- [ ] **HIST-03**: Committing an irreversible transition erases both undo and redo stacks
-- [ ] **HIST-04**: Undo stores a full state snapshot per frame (no reverse-diff trait requirement on user types)
+- [x] **HIST-03**: Committing an irreversible transition erases both undo and redo stacks
+- [x] **HIST-04**: Undo stores a full state snapshot per frame (no reverse-diff trait requirement on user types)
 
 ### Examples
 
@@ -78,8 +78,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DISP-04 | Phase 2 | Complete |
 | HIST-01 | Phase 3 | Complete |
 | HIST-02 | Phase 3 | Complete |
-| HIST-03 | Phase 3 | Pending |
-| HIST-04 | Phase 3 | Pending |
+| HIST-03 | Phase 3 | Complete |
+| HIST-04 | Phase 3 | Complete |
 | EXAM-01 | Phase 4 | Pending |
 | EXAM-02 | Phase 4 | Pending |
 | TEST-01 | Phase 4 | Pending |
