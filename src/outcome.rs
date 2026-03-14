@@ -12,6 +12,39 @@
 use crate::reversibility::Reversibility;
 use crate::spec::EngineSpec;
 
+/// A non-committed outcome explicitly chosen by a [`Behavior`](crate::behavior::Behavior).
+///
+/// When a behavior returns [`BehaviorResult::Stop`](crate::behavior::BehaviorResult::Stop),
+/// it wraps its result in `NonCommittedOutcome` to declare *why* dispatch was halted.
+/// The engine maps each variant to the corresponding [`Outcome`] variant via [`From`].
+///
+/// # Variants
+///
+/// - `InvalidInput` — the input is structurally malformed or unrecognizable for the current state.
+/// - `Disallowed` — the input is structurally valid but rejected by a rule (e.g. illegal move).
+/// - `Aborted` — a fatal precondition failed; dispatch cannot continue.
+///
+/// All three variants are a stable public contract; this enum is **not** `#[non_exhaustive]`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NonCommittedOutcome<N> {
+    /// Input is structurally invalid or unrecognizable for the current state.
+    InvalidInput(N),
+    /// Input is valid but rejected by a game rule.
+    Disallowed(N),
+    /// A fatal precondition failed; dispatch cannot continue.
+    Aborted(N),
+}
+
+impl<F, N> From<NonCommittedOutcome<N>> for Outcome<F, N> {
+    fn from(nco: NonCommittedOutcome<N>) -> Self {
+        match nco {
+            NonCommittedOutcome::InvalidInput(n) => Outcome::InvalidInput(n),
+            NonCommittedOutcome::Disallowed(n) => Outcome::Disallowed(n),
+            NonCommittedOutcome::Aborted(n) => Outcome::Aborted(n),
+        }
+    }
+}
+
 /// The canonical committed record of a single dispatch transition.
 ///
 /// A `Frame<E>` is produced exactly once per successful `dispatch` call and

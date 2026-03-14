@@ -8,7 +8,7 @@
 use std::borrow::Cow;
 use crate::spec::EngineSpec;
 use crate::behavior::{Behavior, BehaviorResult};
-use crate::outcome::{EngineError, Frame, HistoryDisallowed, Outcome};
+use crate::outcome::{EngineError, Frame, HistoryDisallowed, NonCommittedOutcome, Outcome};
 use crate::reversibility::Reversibility;
 use crate::apply::Apply;
 
@@ -133,8 +133,8 @@ impl<E: EngineSpec> Engine<E> {
 
         for behavior in &self.behaviors {
             match behavior.evaluate(&input, &*working) {
-                BehaviorResult::Stop(info) => {
-                    return Ok(Outcome::Aborted(info));
+                BehaviorResult::Stop(outcome) => {
+                    return Ok(outcome.into());
                 }
                 BehaviorResult::Continue(new_diffs) => {
                     for diff in new_diffs {
@@ -318,7 +318,7 @@ mod tests {
         }
 
         fn evaluate(&self, _input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
-            BehaviorResult::Stop("halted".to_string())
+            BehaviorResult::Stop(NonCommittedOutcome::Aborted("halted".to_string()))
         }
     }
 

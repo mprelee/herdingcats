@@ -8,6 +8,7 @@
 //! Instead it returns a [`BehaviorResult`] describing either a list of diffs to
 //! apply or a reason to stop dispatch early.
 
+use crate::outcome::NonCommittedOutcome;
 use crate::spec::EngineSpec;
 
 /// The result returned by a single [`Behavior::evaluate`] call.
@@ -15,30 +16,31 @@ use crate::spec::EngineSpec;
 /// # Example
 ///
 /// ```
-/// # use herdingcats::BehaviorResult;
+/// # use herdingcats::{BehaviorResult, NonCommittedOutcome};
 /// // Continue with two diffs
 /// let r: BehaviorResult<u8, String> = BehaviorResult::Continue(vec![1, 2]);
 /// if let BehaviorResult::Continue(diffs) = &r {
 ///     assert_eq!(diffs, &vec![1u8, 2u8]);
 /// }
 ///
-/// // Stop with a reason
-/// let s: BehaviorResult<u8, String> = BehaviorResult::Stop("out of bounds".to_string());
-/// if let BehaviorResult::Stop(msg) = &s {
+/// // Stop with an explicit non-committed outcome
+/// let s: BehaviorResult<u8, String> =
+///     BehaviorResult::Stop(NonCommittedOutcome::Aborted("out of bounds".to_string()));
+/// if let BehaviorResult::Stop(NonCommittedOutcome::Aborted(msg)) = &s {
 ///     assert_eq!(msg, "out of bounds");
 /// }
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-pub enum BehaviorResult<D, O> {
+pub enum BehaviorResult<D, N> {
     /// Behavior produced zero or more diffs; dispatch continues to the next behavior.
     ///
     /// An empty `Vec` is valid — the behavior had nothing to contribute this turn.
     Continue(Vec<D>),
 
-    /// Behavior halted dispatch immediately. The payload carries non-committed
-    /// information (e.g. a reason, a suggestion) to return to the caller without
-    /// touching the history stack.
-    Stop(O),
+    /// Behavior halted dispatch immediately. The payload explicitly declares which
+    /// [`NonCommittedOutcome`] variant applies: `InvalidInput`, `Disallowed`, or `Aborted`.
+    /// The engine maps this directly to the corresponding [`Outcome`](crate::outcome::Outcome) variant.
+    Stop(NonCommittedOutcome<N>),
 }
 
 /// A single rule in the game, evaluated once per dispatch call.
@@ -120,6 +122,7 @@ pub trait Behavior<E: EngineSpec> {
 mod tests {
     use super::*;
     use crate::apply::Apply;
+    use crate::outcome::NonCommittedOutcome;
     use crate::spec::EngineSpec;
 
     struct TestSpec;
@@ -169,7 +172,7 @@ mod tests {
         }
 
         fn evaluate(&self, _input: &u8, _state: &Vec<u8>) -> BehaviorResult<u8, String> {
-            BehaviorResult::Stop("halted".to_string())
+            BehaviorResult::Stop(NonCommittedOutcome::Aborted("halted".to_string()))
         }
     }
 
@@ -193,10 +196,12 @@ mod tests {
 
     #[test]
     fn behavior_result_stop_is_constructable_and_matchable() {
-        let r: BehaviorResult<u8, String> = BehaviorResult::Stop("reason".to_string());
+        let r: BehaviorResult<u8, String> =
+            BehaviorResult::Stop(NonCommittedOutcome::Aborted("reason".to_string()));
         match r {
             BehaviorResult::Continue(_) => panic!("expected Stop"),
-            BehaviorResult::Stop(msg) => assert_eq!(msg, "reason"),
+            BehaviorResult::Stop(NonCommittedOutcome::Aborted(msg)) => assert_eq!(msg, "reason"),
+            BehaviorResult::Stop(_) => panic!("expected Aborted variant"),
         }
     }
 
