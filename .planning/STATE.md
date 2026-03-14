@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: milestone
 status: planning
-stopped_at: Completed 05-architecture-alignment 05-02-PLAN.md
-last_updated: "2026-03-14T03:00:48.658Z"
+stopped_at: Completed 05-architecture-alignment 05-03-PLAN.md
+last_updated: "2026-03-14T03:04:26.033Z"
 last_activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -62,6 +62,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 04-examples-and-tests P03 | 3min | 2 tasks | 1 files |
 | Phase 05-architecture-alignment P01 | 4min | 2 tasks | 6 files |
 | Phase 05-architecture-alignment P02 | 3min | 1 tasks | 3 files |
+| Phase 05-architecture-alignment P03 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,8 @@ Recent decisions affecting current work:
 - [Phase 05-01]: BehaviorResult type param renamed O→N for consistency with Outcome<F, N> naming; Stop variant now wraps NonCommittedOutcome<N>
 - [Phase 05-02]: Frame<E> is a pure data record with no dispatch-protocol fields — Reversibility belongs to the history stack tuple, not the frame itself
 - [Phase 05-02]: Apply trait doc now enforces trace contract: each state-mutating call MUST return at least one trace entry (was previously 'empty Vec is valid')
+- [Phase 05-architecture-alignment]: EngineSpec::State has no Default bound — callers supply initial state to Engine::new(), engine never calls Default internally
+- [Phase 05-architecture-alignment]: Test updated to use explicit vec![] construction instead of ::default() — proves Default bound is truly absent from EngineSpec
 
 ### Roadmap Evolution
 
@@ -115,6 +118,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T03:00:48.656Z
-Stopped at: Completed 05-architecture-alignment 05-02-PLAN.md
+Last session: 2026-03-14T03:04:26.032Z
+Stopped at: Completed 05-architecture-alignment 05-03-PLAN.md
 Resume file: None

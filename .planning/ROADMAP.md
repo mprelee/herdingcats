@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Dispatch** - Implement CoW working state and the ordered, atomic dispatch algorithm (completed 2026-03-14)
 - [ ] **Phase 3: History** - Implement undo/redo with snapshot strategy and irreversibility boundary
 - [x] **Phase 4: Examples and Tests** - Implement tic-tac-toe and backgammon examples; write unit and property tests (completed 2026-03-14)
-- [ ] **Phase 5: Architecture Alignment** - Align codebase with ARCHITECTURE.md: NonCommittedOutcome, Frame shape, EngineSpec bounds, trace contract, docs
+- [x] **Phase 5: Architecture Alignment** - Align codebase with ARCHITECTURE.md: NonCommittedOutcome, Frame shape, EngineSpec bounds, trace contract, docs (completed 2026-03-14)
 
 ## Phase Details
 
@@ -114,4 +114,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Dispatch | 3/3 | Complete   | 2026-03-14 |
 | 3. History | 0/2 | Not started | - |
 | 4. Examples and Tests | 3/3 | Complete    | 2026-03-14 |
-| 5. Architecture Alignment | 2/3 | In Progress|  |
+| 5. Architecture Alignment | 3/3 | Complete   | 2026-03-14 |
