@@ -59,9 +59,10 @@ use crate::apply::Apply;
 /// }
 /// ```
 pub trait EngineSpec: Sized {
-    /// The game state type. Must support cloning (for CoW snapshots),
-    /// debug formatting, and default construction (for engine initialisation).
-    type State: Clone + std::fmt::Debug + Default;
+    /// The game state type. Must support cloning (for CoW snapshots) and
+    /// debug formatting. Default construction is NOT required by the engine —
+    /// `Engine::new()` takes the initial state as a parameter.
+    type State: Clone + std::fmt::Debug;
 
     /// A player input (move, action, command). Must support cloning and debug.
     type Input: Clone + std::fmt::Debug;
@@ -109,8 +110,8 @@ mod tests {
 
     #[test]
     fn engine_spec_associated_types_satisfy_bounds() {
-        // State: Clone + Debug + Default
-        let state = <TestSpec as EngineSpec>::State::default();
+        // State: Clone + Debug (no Default required)
+        let state: <TestSpec as EngineSpec>::State = vec![];
         let _cloned = state.clone();
         let _debug = format!("{:?}", state);
 
