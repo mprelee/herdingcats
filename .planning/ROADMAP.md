@@ -61,7 +61,11 @@ Plans:
   2. `Engine::redo()` returns `Redone(frame)` when redo stack is non-empty, and `Disallowed(NothingToRedo)` when it is empty
   3. Committing a `Reversibility::Irreversible` dispatch erases both undo and redo stacks — verified by calling `undo()` afterward and observing `Disallowed`
   4. Undoing restores state to the exact snapshot captured before the undone transition — no `Reversible` trait required on user diff types
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — HistoryDisallowed enum + crate root re-export (HIST-01, HIST-02)
+- [ ] 03-02-PLAN.md — Engine stack upgrade, dispatch() snapshot/clear, undo(), redo(), depth queries, tests (HIST-01, HIST-02, HIST-03, HIST-04)
 
 ### Phase 4: Examples and Tests
 **Goal**: Two real games validate the public API under real conditions, and automated tests enforce all 15 core invariants
@@ -83,5 +87,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Core Types | 2/2 | Complete    | 2026-03-14 |
 | 2. Dispatch | 3/3 | Complete   | 2026-03-14 |
-| 3. History | 0/? | Not started | - |
+| 3. History | 0/2 | Not started | - |
 | 4. Examples and Tests | 0/? | Not started | - |
