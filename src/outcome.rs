@@ -165,13 +165,13 @@ pub enum EngineError {
     CorruptHistory,
 }
 
-/// The reason an [`Engine::undo`] or [`Engine::redo`] call was disallowed.
+/// The reason an undo or redo call was disallowed.
 ///
 /// Returned as the `N` payload in `Outcome::Disallowed(reason)` from
-/// [`Engine::undo`] and [`Engine::redo`].
+/// `Engine::undo()` and `Engine::redo()`.
 ///
 /// This enum is **not** `#[non_exhaustive]` — its two variants are a complete
-/// stable public contract (same reasoning as [`Reversibility`]).
+/// stable public contract (same reasoning as `Reversibility`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HistoryDisallowed {
     /// `undo()` was called but the undo stack is empty.
