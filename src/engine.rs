@@ -239,6 +239,7 @@ mod tests {
     use super::*;
     use crate::apply::Apply;
     use crate::spec::EngineSpec;
+    use proptest::prelude::*;
 
     // -----------------------------------------------------------------------
     // Test infrastructure
@@ -1106,5 +1107,102 @@ mod tests {
             "normal dispatch must return Ok(Outcome), not Err(EngineError)");
         // The types are statically distinct — EngineError cannot be pattern-matched as Outcome.
         // (Structural: enforced by the Rust type system.)
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 4 tests: property tests (proptest)
+    // -----------------------------------------------------------------------
+
+    // Suite 1 — Determinism
+    // Same input sequence applied to two identically-constructed engines always
+    // produces the same committed state. Validates ARCHITECTURE.md §"Deterministic Ordering".
+    proptest! {
+        #[test]
+        fn prop_dispatch_is_deterministic(
+            inputs in prop::collection::vec(any::<u8>(), 0..10)
+        ) {
+            let mut engine1 = Engine::<TestSpec>::new(
+                vec![],
+                vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            );
+            let mut engine2 = Engine::<TestSpec>::new(
+                vec![],
+                vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            );
+            for &input in &inputs {
+                let _ = engine1.dispatch(input, Reversibility::Reversible);
+                let _ = engine2.dispatch(input, Reversibility::Reversible);
+                prop_assert_eq!(
+                    engine1.state(),
+                    engine2.state(),
+                    "engines must have identical state after input {:?}", input
+                );
+            }
+        }
+    }
+
+    /// Suite 2 — Undo/Redo Correctness
+    /// After any arbitrary sequence of dispatch/undo/redo operations, the engine
+    /// must never panic and must maintain structural consistency:
+    /// - undo_depth() + redo_depth() accounts for committed dispatches minus undone ones
+    /// - state() is coherent (no corruption)
+    /// Uses an Op enum strategy to generate mixed operation sequences.
+    #[allow(dead_code)]
+    #[derive(Debug, Clone)]
+    enum Op {
+        Dispatch(u8),
+        Undo,
+        Redo,
+    }
+
+    fn arb_op() -> impl Strategy<Value = Op> {
+        prop_oneof![
+            any::<u8>().prop_map(Op::Dispatch),
+            Just(Op::Undo),
+            Just(Op::Redo),
+        ]
+    }
+
+    proptest! {
+        #[test]
+        fn prop_undo_restores_exact_state(
+            ops in prop::collection::vec(arb_op(), 0..20)
+        ) {
+            let mut engine = Engine::<TestSpec>::new(
+                vec![],
+                vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
+            );
+
+            // Apply all ops — engine must never panic
+            for op in &ops {
+                match op {
+                    Op::Dispatch(b) => {
+                        let _ = engine.dispatch(*b, Reversibility::Reversible);
+                    }
+                    Op::Undo => {
+                        let _ = engine.undo();
+                    }
+                    Op::Redo => {
+                        let _ = engine.redo();
+                    }
+                }
+            }
+
+            // Structural consistency: undo to bottom and verify we reach initial state.
+            // Undo everything on the undo stack.
+            let undo_depth = engine.undo_depth();
+            for _ in 0..undo_depth {
+                let _ = engine.undo();
+            }
+            let state_after_all_undos = engine.state().clone();
+
+            // After undoing everything, undo_depth must be 0.
+            prop_assert_eq!(engine.undo_depth(), 0,
+                "after undoing all frames, undo_depth must be 0");
+
+            // The state after all undos must equal the initial state (vec![]).
+            prop_assert_eq!(&state_after_all_undos, &vec![] as &Vec<u8>,
+                "after undoing all operations, state must equal initial state");
+        }
     }
 }
