@@ -8,7 +8,7 @@
 use std::borrow::Cow;
 use crate::spec::EngineSpec;
 use crate::behavior::{Behavior, BehaviorResult};
-use crate::outcome::{EngineError, Frame, HistoryDisallowed, NonCommittedOutcome, Outcome};
+use crate::outcome::{EngineError, Frame, HistoryDisallowed, Outcome};
 use crate::reversibility::Reversibility;
 use crate::apply::Apply;
 
@@ -238,6 +238,7 @@ impl<E: EngineSpec> Engine<E> {
 mod tests {
     use super::*;
     use crate::apply::Apply;
+    use crate::outcome::NonCommittedOutcome;
     use crate::spec::EngineSpec;
     use proptest::prelude::*;
 
@@ -1142,10 +1143,12 @@ mod tests {
     }
 
     /// Suite 2 — Undo/Redo Correctness
+    ///
     /// After any arbitrary sequence of dispatch/undo/redo operations, the engine
     /// must never panic and must maintain structural consistency:
-    /// - undo_depth() + redo_depth() accounts for committed dispatches minus undone ones
-    /// - state() is coherent (no corruption)
+    ///   - undo_depth() + redo_depth() accounts for committed dispatches minus undone ones
+    ///   - state() is coherent (no corruption)
+    ///
     /// Uses an Op enum strategy to generate mixed operation sequences.
     #[allow(dead_code)]
     #[derive(Debug, Clone)]

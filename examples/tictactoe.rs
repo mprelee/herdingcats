@@ -1,18 +1,18 @@
-/// HerdingCats: Tic-Tac-Toe Scripted Demo
-///
-/// This file is a tutorial-quality example of the full HerdingCats public API.
-/// Read it top-to-bottom to understand how to:
-///   - Define game types and implement EngineSpec
-///   - Implement Behavior for each game rule
-///   - Implement Apply for your Diff type
-///   - Use Engine::dispatch, Engine::undo, and Engine::redo
-///   - Handle all 7 Outcome variants exhaustively
-///
-/// Run with: cargo run --example tictactoe
+// HerdingCats: Tic-Tac-Toe Scripted Demo
+//
+// This file is a tutorial-quality example of the full HerdingCats public API.
+// Read it top-to-bottom to understand how to:
+//   - Define game types and implement EngineSpec
+//   - Implement Behavior for each game rule
+//   - Implement Apply for your Diff type
+//   - Use Engine::dispatch, Engine::undo, and Engine::redo
+//   - Handle all 7 Outcome variants exhaustively
+//
+// Run with: cargo run --example tictactoe
 
 use herdingcats::{
     Apply, Behavior, BehaviorResult, Engine, EngineError, EngineSpec, Frame, HistoryDisallowed,
-    Outcome, Reversibility,
+    NonCommittedOutcome, Outcome, Reversibility,
 };
 
 // ── Game spec ────────────────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ impl EngineSpec for TicTacToeSpec {
 // ── Behaviors: the game rules, evaluated in order_key order ──────────────────
 
 /// Behavior 1 (order 0): Guard against moves after the game ends.
-/// Returns Stop("game is over") if game_over is true → produces Aborted in dispatch.
+/// Returns Stop(NonCommittedOutcome::Disallowed) if game_over is true → produces Disallowed in dispatch.
 struct ValidateTurn;
 
 impl Behavior<TicTacToeSpec> for ValidateTurn {
@@ -119,7 +119,7 @@ impl Behavior<TicTacToeSpec> for ValidateTurn {
         state: &TicTacToeState,
     ) -> BehaviorResult<TicTacToeDiff, String> {
         if state.game_over {
-            BehaviorResult::Stop("game is over".to_string())
+            BehaviorResult::Stop(NonCommittedOutcome::Disallowed("game is over".to_string()))
         } else {
             BehaviorResult::Continue(vec![])
         }
@@ -127,7 +127,8 @@ impl Behavior<TicTacToeSpec> for ValidateTurn {
 }
 
 /// Behavior 2 (order 1): Validate that the target cell exists and is empty.
-/// Returns Stop("out of bounds") or Stop("cell already occupied") → Aborted.
+/// Out-of-bounds → InvalidInput (structurally malformed input).
+/// Cell occupied → Disallowed (valid input, rejected by rule).
 struct ValidateCell;
 
 impl Behavior<TicTacToeSpec> for ValidateCell {
@@ -144,10 +145,10 @@ impl Behavior<TicTacToeSpec> for ValidateCell {
     ) -> BehaviorResult<TicTacToeDiff, String> {
         let TicTacToeInput::Place { row, col } = input;
         if *row > 2 || *col > 2 {
-            return BehaviorResult::Stop("out of bounds".to_string());
+            return BehaviorResult::Stop(NonCommittedOutcome::InvalidInput("out of bounds".to_string()));
         }
         if state.board[*row][*col].is_some() {
-            return BehaviorResult::Stop("cell already occupied".to_string());
+            return BehaviorResult::Stop(NonCommittedOutcome::Disallowed("cell already occupied".to_string()));
         }
         BehaviorResult::Continue(vec![])
     }
@@ -189,14 +190,14 @@ struct CheckWin;
 impl CheckWin {
     fn has_winner(board: &[[Option<Player>; 3]; 3], player: &Player) -> bool {
         // Rows
-        for row in 0..3 {
-            if (0..3).all(|col| board[row][col].as_ref() == Some(player)) {
+        for row_cells in board.iter() {
+            if row_cells.iter().all(|cell| cell.as_ref() == Some(player)) {
                 return true;
             }
         }
         // Columns
-        for col in 0..3 {
-            if (0..3).all(|row| board[row][col].as_ref() == Some(player)) {
+        for col in 0..3usize {
+            if board.iter().all(|row_cells| row_cells[col].as_ref() == Some(player)) {
                 return true;
             }
         }
@@ -292,13 +293,10 @@ fn print_dispatch(
             println!("[dispatch] {} => Aborted({})", label, reason)
         }
         Ok(Outcome::InvalidInput(reason)) => {
-            // InvalidInput: structurally handled; current MVP engine always returns Aborted
-            // from BehaviorResult::Stop — this arm is unreachable via dispatch but is
-            // required for an exhaustive match covering all 7 Outcome variants.
             println!("[dispatch] {} => InvalidInput({})", label, reason)
         }
         Ok(Outcome::Disallowed(reason)) => {
-            println!("[dispatch] {} => Disallowed({:?})", label, reason)
+            println!("[dispatch] {} => Disallowed({})", label, reason)
         }
         Ok(Outcome::Undone(_)) | Ok(Outcome::Redone(_)) => {
             unreachable!("dispatch never returns Undone or Redone")
@@ -383,11 +381,11 @@ fn main() {
     println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
     println!();
 
-    // ── Step 3: X tries (0,0) again — Aborted (cell already occupied) ────────
-    println!("Step 3: X tries (0,0) again  [demonstrates: Aborted — ValidateCell fires]");
+    // ── Step 3: X tries (0,0) again — Disallowed (cell already occupied) ────
+    println!("Step 3: X tries (0,0) again  [demonstrates: Disallowed — ValidateCell fires]");
     let result = engine.dispatch(TicTacToeInput::Place { row: 0, col: 0 }, Reversibility::Reversible);
     print_dispatch("Place(0,0) again", &result);
-    println!("  (board unchanged — Aborted leaves state intact)");
+    println!("  (board unchanged — Disallowed leaves state intact)");
     println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
     println!();
 
@@ -409,8 +407,8 @@ fn main() {
     println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
     println!();
 
-    // ── Step 6: X tries (3,3) — Aborted (out of bounds) ─────────────────────
-    println!("Step 6: X tries (3,3)  [demonstrates: Aborted — ValidateCell out-of-bounds]");
+    // ── Step 6: X tries (3,3) — InvalidInput (out of bounds) ────────────────
+    println!("Step 6: X tries (3,3)  [demonstrates: InvalidInput — ValidateCell out-of-bounds]");
     let result = engine.dispatch(TicTacToeInput::Place { row: 3, col: 3 }, Reversibility::Reversible);
     print_dispatch("Place(3,3) out-of-bounds", &result);
     println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
@@ -449,8 +447,8 @@ fn main() {
     print_board(engine.state());
     println!();
 
-    // ── Step 9: Post-game dispatch — Aborted (ValidateTurn: game_over) ───────
-    println!("Step 9: Dispatch after game over  [demonstrates: Aborted — ValidateTurn fires]");
+    // ── Step 9: Post-game dispatch — Disallowed (ValidateTurn: game_over) ───
+    println!("Step 9: Dispatch after game over  [demonstrates: Disallowed — ValidateTurn fires]");
     let result = engine.dispatch(TicTacToeInput::Place { row: 2, col: 2 }, Reversibility::Reversible);
     print_dispatch("Place(2,2) after game over", &result);
     println!();
@@ -476,11 +474,10 @@ fn main() {
     println!("Demo complete.");
     println!();
     println!("Outcome variants demonstrated at runtime:");
-    println!("  Committed  — Steps 1, 2, 8");
-    println!("  Aborted    — Steps 3, 6, 9");
-    println!("  Undone     — Step 4");
-    println!("  Redone     — Step 5");
-    println!("  NoChange   — Step 7");
-    println!("  Disallowed — Step 10");
-    println!("  InvalidInput — match arm present (unreachable via dispatch in MVP engine)");
+    println!("  Committed    — Steps 1, 2, 8");
+    println!("  Disallowed   — Steps 3, 9, 10");
+    println!("  InvalidInput — Step 6");
+    println!("  Undone       — Step 4");
+    println!("  Redone       — Step 5");
+    println!("  NoChange     — Step 7");
 }

@@ -359,6 +359,7 @@ mod tests {
     fn history_disallowed_derives_debug_clone_copy_partialeq_eq() {
         let a = HistoryDisallowed::NothingToUndo;
         let b = a; // Copy
+        #[allow(clippy::clone_on_copy)]
         let c = a.clone(); // Clone
         assert_eq!(a, b);
         assert_eq!(a, c);

@@ -116,11 +116,13 @@ mod tests {
 
         // Input: Clone + Debug
         let input: <TestSpec as EngineSpec>::Input = 42u8;
+        #[allow(clippy::clone_on_copy)]
         let _cloned_input = input.clone();
         let _debug_input = format!("{:?}", input);
 
         // Diff: Clone + Debug
         let diff: <TestSpec as EngineSpec>::Diff = 1u8;
+        #[allow(clippy::clone_on_copy)]
         let _cloned_diff = diff.clone();
 
         // Trace: Clone + Debug
