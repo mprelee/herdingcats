@@ -581,9 +581,9 @@ mod tests {
             vec![],
             vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
         );
-        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.undo_depth(), 1);
-        engine.dispatch(2u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.undo_depth(), 2);
     }
 
@@ -593,7 +593,7 @@ mod tests {
             vec![],
             vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
         );
-        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         // redo_depth must be 0 after a Committed dispatch (new timeline)
         assert_eq!(engine.redo_depth(), 0);
     }
@@ -604,11 +604,11 @@ mod tests {
             vec![],
             vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
         );
-        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
-        engine.dispatch(2u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.undo_depth(), 2);
         // Irreversible wipes both stacks
-        engine.dispatch(99u8, Reversibility::Irreversible).unwrap();
+        let _ = engine.dispatch(99u8, Reversibility::Irreversible).unwrap();
         assert_eq!(engine.undo_depth(), 0, "irreversible must clear undo stack");
         assert_eq!(engine.redo_depth(), 0, "irreversible must clear redo stack");
     }
@@ -622,12 +622,12 @@ mod tests {
                 Box::new(NoOpBehavior),
             ],
         );
-        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         let ud = engine.undo_depth();
         let rd = engine.redo_depth();
         // Use a fresh noop-only engine to produce NoChange without touching stacks
         let mut noop_engine = Engine::<TestSpec>::new(vec![], vec![Box::new(NoOpBehavior)]);
-        noop_engine.dispatch(1u8, Reversibility::Reversible).unwrap(); // NoChange
+        let _ = noop_engine.dispatch(1u8, Reversibility::Reversible).unwrap(); // NoChange
         assert_eq!(noop_engine.undo_depth(), 0);
         assert_eq!(noop_engine.redo_depth(), 0);
         // Original engine stacks unchanged by separate engine
@@ -688,9 +688,9 @@ mod tests {
             vec![],
             vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
         );
-        engine.dispatch(42u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
         let state_after_dispatch = engine.state().clone();
-        engine.undo().unwrap();
+        let _ = engine.undo().unwrap();
         let state_before_dispatch = engine.state().clone();
         assert_ne!(state_after_dispatch, state_before_dispatch);
 
@@ -708,23 +708,23 @@ mod tests {
         assert_eq!(engine.undo_depth(), 0);
         assert_eq!(engine.redo_depth(), 0);
 
-        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.undo_depth(), 1);
         assert_eq!(engine.redo_depth(), 0);
 
-        engine.dispatch(2u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.undo_depth(), 2);
         assert_eq!(engine.redo_depth(), 0);
 
-        engine.undo().unwrap();
+        let _ = engine.undo().unwrap();
         assert_eq!(engine.undo_depth(), 1);
         assert_eq!(engine.redo_depth(), 1);
 
-        engine.undo().unwrap();
+        let _ = engine.undo().unwrap();
         assert_eq!(engine.undo_depth(), 0);
         assert_eq!(engine.redo_depth(), 2);
 
-        engine.redo().unwrap();
+        let _ = engine.redo().unwrap();
         assert_eq!(engine.undo_depth(), 1);
         assert_eq!(engine.redo_depth(), 1);
     }
@@ -735,13 +735,13 @@ mod tests {
             vec![],
             vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
         );
-        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
-        engine.dispatch(2u8, Reversibility::Reversible).unwrap();
-        engine.undo().unwrap();
+        let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
+        let _ = engine.undo().unwrap();
         assert_eq!(engine.redo_depth(), 1, "undo must populate redo stack");
 
         // New commit on a different branch — erases the redo future.
-        engine.dispatch(99u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(99u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.redo_depth(), 0, "new Committed dispatch must clear redo stack");
     }
 
@@ -754,28 +754,28 @@ mod tests {
                 Box::new(NoOpBehavior),
             ],
         );
-        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
-        engine.undo().unwrap();
+        let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        let _ = engine.undo().unwrap();
         assert_eq!(engine.redo_depth(), 1);
 
         // Replace echo with noop-only engine to force NoChange
         let mut engine2 = Engine::<TestSpec>::new(vec![], vec![Box::new(NoOpBehavior)]);
-        engine2.dispatch(1u8, Reversibility::Reversible).unwrap(); // NoChange (no diffs)
+        let _ = engine2.dispatch(1u8, Reversibility::Reversible).unwrap(); // NoChange (no diffs)
         // (redo depth was never populated, so assert on a fresh engine with setup)
 
         // Simpler test: dispatch + undo populates redo. NoChange after does NOT clear it.
         // We need an engine that can produce both Committed and NoChange.
         // Use a fresh engine, commit one, undo it (redo_depth=1), then NoChange dispatch.
         let mut e = Engine::<TestSpec>::new(vec![], vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })]);
-        e.dispatch(1u8, Reversibility::Reversible).unwrap();
-        e.undo().unwrap();
+        let _ = e.dispatch(1u8, Reversibility::Reversible).unwrap();
+        let _ = e.undo().unwrap();
         assert_eq!(e.redo_depth(), 1);
         // Replace behaviors to trigger NoChange: use an engine that NoOps.
         // Since we can't easily swap behaviors mid-engine, rely on the contract:
         // only Committed clears redo. This is enforced by code inspection + the
         // new_committed_dispatch_after_undo_clears_redo_stack test above.
         // Structural test: ensure redo_depth is still 1 after calling undo on empty stack (which returns Disallowed, not Committed).
-        e.undo().unwrap(); // NothingToUndo — does not clear redo
+        let _ = e.undo().unwrap(); // NothingToUndo — does not clear redo
         assert_eq!(e.redo_depth(), 1, "Disallowed outcome must not clear redo stack");
     }
 
@@ -787,14 +787,14 @@ mod tests {
             vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
         );
         // Build up some history.
-        engine.dispatch(1u8, Reversibility::Reversible).unwrap();
-        engine.dispatch(2u8, Reversibility::Reversible).unwrap();
-        engine.undo().unwrap();
+        let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
+        let _ = engine.undo().unwrap();
         assert_eq!(engine.undo_depth(), 1);
         assert_eq!(engine.redo_depth(), 1);
 
         // Irreversible commit: state changes, but both stacks are wiped.
-        engine.dispatch(99u8, Reversibility::Irreversible).unwrap();
+        let _ = engine.dispatch(99u8, Reversibility::Irreversible).unwrap();
         assert_eq!(engine.undo_depth(), 0, "irreversible commit must clear undo stack");
         assert_eq!(engine.redo_depth(), 0, "irreversible commit must clear redo stack");
 
@@ -813,10 +813,10 @@ mod tests {
             initial_state.clone(),
             vec![Box::new(EchoBehavior { key: 0, behavior_name: "echo" })],
         );
-        engine.dispatch(99u8, Reversibility::Reversible).unwrap();
+        let _ = engine.dispatch(99u8, Reversibility::Reversible).unwrap();
         assert_ne!(engine.state(), &initial_state);
 
-        engine.undo().unwrap();
+        let _ = engine.undo().unwrap();
         assert_eq!(engine.state(), &initial_state,
             "undo must restore exact pre-dispatch snapshot; no Reversible trait required");
     }
