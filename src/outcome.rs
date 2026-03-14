@@ -11,7 +11,7 @@
 
 use crate::spec::EngineSpec;
 
-/// A non-committed outcome explicitly chosen by a [`Behavior`](crate::behavior::Behavior).
+/// A non-committed outcome explicitly chosen by a [`BehaviorDef`](crate::behavior::BehaviorDef) evaluate fn.
 ///
 /// When a behavior returns [`BehaviorResult::Stop`](crate::behavior::BehaviorResult::Stop),
 /// it wraps its result in `NonCommittedOutcome` to declare *why* dispatch was halted.
