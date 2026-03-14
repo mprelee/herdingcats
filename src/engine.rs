@@ -5,12 +5,12 @@
 //! evaluate an input through all behaviors in deterministic order and atomically
 //! commit the resulting state change.
 
-use std::borrow::Cow;
-use crate::spec::EngineSpec;
+use crate::apply::Apply;
 use crate::behavior::{BehaviorDef, BehaviorResult};
 use crate::outcome::{EngineError, Frame, HistoryDisallowed, Outcome};
 use crate::reversibility::Reversibility;
-use crate::apply::Apply;
+use crate::spec::EngineSpec;
+use std::borrow::Cow;
 
 /// The HerdingCats dispatch engine.
 ///
@@ -169,7 +169,8 @@ impl<E: EngineSpec> Engine<E> {
         // Single-timeline history: any new commit erases the redo future.
         self.redo_stack.clear();
         // Push snapshot + frame + reversibility unconditionally on Committed.
-        self.undo_stack.push((prior_state, frame.clone(), reversibility));
+        self.undo_stack
+            .push((prior_state, frame.clone(), reversibility));
 
         // Irreversible commits also wipe undo history — the transition is permanent.
         if reversibility == Reversibility::Irreversible {
@@ -195,14 +196,13 @@ impl<E: EngineSpec> Engine<E> {
     ///
     /// Note: the `N` type parameter for this call is `HistoryDisallowed`, not
     /// `E::NonCommittedInfo`. This asymmetry from `dispatch()` is intentional.
-    pub fn undo(
-        &mut self,
-    ) -> Result<Outcome<Frame<E>, HistoryDisallowed>, EngineError> {
+    pub fn undo(&mut self) -> Result<Outcome<Frame<E>, HistoryDisallowed>, EngineError> {
         match self.undo_stack.pop() {
             None => Ok(Outcome::Disallowed(HistoryDisallowed::NothingToUndo)),
             Some((prior_state, frame, reversibility)) => {
                 let current_state = std::mem::replace(&mut self.state, prior_state);
-                self.redo_stack.push((current_state, frame.clone(), reversibility));
+                self.redo_stack
+                    .push((current_state, frame.clone(), reversibility));
                 Ok(Outcome::Undone(frame))
             }
         }
@@ -222,14 +222,13 @@ impl<E: EngineSpec> Engine<E> {
     ///
     /// Note: the `N` type parameter for this call is `HistoryDisallowed`, not
     /// `E::NonCommittedInfo`. This asymmetry from `dispatch()` is intentional.
-    pub fn redo(
-        &mut self,
-    ) -> Result<Outcome<Frame<E>, HistoryDisallowed>, EngineError> {
+    pub fn redo(&mut self) -> Result<Outcome<Frame<E>, HistoryDisallowed>, EngineError> {
         match self.redo_stack.pop() {
             None => Ok(Outcome::Disallowed(HistoryDisallowed::NothingToRedo)),
             Some((prior_state, frame, reversibility)) => {
                 let current_state = std::mem::replace(&mut self.state, prior_state);
-                self.undo_stack.push((current_state, frame.clone(), reversibility));
+                self.undo_stack
+                    .push((current_state, frame.clone(), reversibility));
                 Ok(Outcome::Redone(frame))
             }
         }
@@ -331,15 +330,30 @@ mod tests {
         // Behaviors provided in out-of-order: keys [2, 0, 1], names ["c", "a", "b"]
         // Expected sort: (0,"a"), (1,"b"), (2,"c") → diff bytes [10, 20, 30]
         let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
-            BehaviorDef { name: "c", order_key: 2, evaluate: tracing_30_eval },
-            BehaviorDef { name: "a", order_key: 0, evaluate: tracing_10_eval },
-            BehaviorDef { name: "b", order_key: 1, evaluate: tracing_20_eval },
+            BehaviorDef {
+                name: "c",
+                order_key: 2,
+                evaluate: tracing_30_eval,
+            },
+            BehaviorDef {
+                name: "a",
+                order_key: 0,
+                evaluate: tracing_10_eval,
+            },
+            BehaviorDef {
+                name: "b",
+                order_key: 1,
+                evaluate: tracing_20_eval,
+            },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
-            assert_eq!(frame.diffs, vec![10u8, 20u8, 30u8],
-                "behaviors must be evaluated in (order_key, name) sort order");
+            assert_eq!(
+                frame.diffs,
+                vec![10u8, 20u8, 30u8],
+                "behaviors must be evaluated in (order_key, name) sort order"
+            );
         } else {
             panic!("expected Committed outcome");
         }
@@ -371,7 +385,11 @@ mod tests {
         let initial: Vec<u8> = vec![1, 2, 3];
         let mut engine = Engine::<TestSpec>::new(
             initial,
-            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+            vec![BehaviorDef {
+                name: "noop",
+                order_key: 0,
+                evaluate: noop_eval,
+            }],
         );
 
         // Compare the inner heap buffer pointer — the allocation address — not the Vec
@@ -394,7 +412,11 @@ mod tests {
         let initial: Vec<u8> = vec![1, 2, 3];
         let mut engine = Engine::<TestSpec>::new(
             initial,
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
 
         // Compare the inner heap buffer pointer. After a diff is applied, Cow clones
@@ -415,8 +437,16 @@ mod tests {
     fn dispatch_evaluates_in_deterministic_order() {
         // Two behaviors: key=1 emits 200, key=0 emits 100 → frame.diffs must be [100, 200].
         let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
-            BehaviorDef { name: "second", order_key: 1, evaluate: tracing_200_eval },
-            BehaviorDef { name: "first",  order_key: 0, evaluate: tracing_100_eval },
+            BehaviorDef {
+                name: "second",
+                order_key: 1,
+                evaluate: tracing_200_eval,
+            },
+            BehaviorDef {
+                name: "first",
+                order_key: 0,
+                evaluate: tracing_100_eval,
+            },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
@@ -434,8 +464,16 @@ mod tests {
         // Initial state is empty; after echo applies one diff, length == 1.
         // So state_reading_eval should emit 1u8.
         let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
-            BehaviorDef { name: "echo",         order_key: 0,  evaluate: echo_eval },
-            BehaviorDef { name: "state_reader",  order_key: 10, evaluate: state_reading_eval },
+            BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            },
+            BehaviorDef {
+                name: "state_reader",
+                order_key: 10,
+                evaluate: state_reading_eval,
+            },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(99u8, Reversibility::Reversible).unwrap();
@@ -443,8 +481,10 @@ mod tests {
             // frame.diffs: [99 (echo), 1 (state length after echo)]
             assert_eq!(frame.diffs.len(), 2);
             assert_eq!(frame.diffs[0], 99u8);
-            assert_eq!(frame.diffs[1], 1u8,
-                "state_reading_eval must see state after echo applied its diff");
+            assert_eq!(
+                frame.diffs[1], 1u8,
+                "state_reading_eval must see state after echo applied its diff"
+            );
         } else {
             panic!("expected Committed");
         }
@@ -455,13 +495,24 @@ mod tests {
         // Each u8 diff emits "applied N" trace when applied.
         // Two diffs → two traces in the same order.
         let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
-            BehaviorDef { name: "first",  order_key: 0, evaluate: tracing_10_eval },
-            BehaviorDef { name: "second", order_key: 1, evaluate: tracing_20_eval },
+            BehaviorDef {
+                name: "first",
+                order_key: 0,
+                evaluate: tracing_10_eval,
+            },
+            BehaviorDef {
+                name: "second",
+                order_key: 1,
+                evaluate: tracing_20_eval,
+            },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
-            assert_eq!(frame.traces, vec!["applied 10".to_string(), "applied 20".to_string()]);
+            assert_eq!(
+                frame.traces,
+                vec!["applied 10".to_string(), "applied 20".to_string()]
+            );
         } else {
             panic!("expected Committed");
         }
@@ -471,8 +522,16 @@ mod tests {
     fn stop_halts_dispatch() {
         // stop_eval (key=0) fires first and returns Stop. No frame should be committed.
         let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
-            BehaviorDef { name: "stopper", order_key: 0,  evaluate: stop_eval },
-            BehaviorDef { name: "echo",    order_key: 99, evaluate: echo_eval },
+            BehaviorDef {
+                name: "stopper",
+                order_key: 0,
+                evaluate: stop_eval,
+            },
+            BehaviorDef {
+                name: "echo",
+                order_key: 99,
+                evaluate: echo_eval,
+            },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
@@ -488,7 +547,11 @@ mod tests {
     fn no_frame_on_no_diffs() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+            vec![BehaviorDef {
+                name: "noop",
+                order_key: 0,
+                evaluate: noop_eval,
+            }],
         );
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
         assert!(
@@ -501,11 +564,13 @@ mod tests {
     fn frame_contains_input_diffs_trace() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
-        let outcome = engine
-            .dispatch(77u8, Reversibility::Irreversible)
-            .unwrap();
+        let outcome = engine.dispatch(77u8, Reversibility::Irreversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
             assert_eq!(frame.input, 77u8);
             assert!(!frame.diffs.is_empty());
@@ -545,7 +610,11 @@ mod tests {
     fn committed_dispatch_increments_undo_depth() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.undo_depth(), 1);
@@ -557,7 +626,11 @@ mod tests {
     fn committed_dispatch_clears_redo_stack() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         // redo_depth must be 0 after a Committed dispatch (new timeline)
@@ -568,7 +641,11 @@ mod tests {
     fn irreversible_committed_dispatch_clears_both_stacks() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
@@ -584,8 +661,16 @@ mod tests {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
             vec![
-                BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval },
-                BehaviorDef { name: "noop", order_key: 1, evaluate: noop_eval },
+                BehaviorDef {
+                    name: "echo",
+                    order_key: 0,
+                    evaluate: echo_eval,
+                },
+                BehaviorDef {
+                    name: "noop",
+                    order_key: 1,
+                    evaluate: noop_eval,
+                },
             ],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
@@ -594,9 +679,15 @@ mod tests {
         // Use a fresh noop-only engine to produce NoChange without touching stacks
         let mut noop_engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+            vec![BehaviorDef {
+                name: "noop",
+                order_key: 0,
+                evaluate: noop_eval,
+            }],
         );
-        let _ = noop_engine.dispatch(1u8, Reversibility::Reversible).unwrap(); // NoChange
+        let _ = noop_engine
+            .dispatch(1u8, Reversibility::Reversible)
+            .unwrap(); // NoChange
         assert_eq!(noop_engine.undo_depth(), 0);
         assert_eq!(noop_engine.redo_depth(), 0);
         // Original engine stacks unchanged by separate engine
@@ -614,7 +705,10 @@ mod tests {
         let mut engine = Engine::<TestSpec>::new(vec![], vec![]);
         let result = engine.undo().unwrap();
         assert!(
-            matches!(result, Outcome::Disallowed(HistoryDisallowed::NothingToUndo)),
+            matches!(
+                result,
+                Outcome::Disallowed(HistoryDisallowed::NothingToUndo)
+            ),
             "undo on empty stack must return Disallowed(NothingToUndo)"
         );
     }
@@ -625,7 +719,10 @@ mod tests {
         let mut engine = Engine::<TestSpec>::new(vec![], vec![]);
         let result = engine.redo().unwrap();
         assert!(
-            matches!(result, Outcome::Disallowed(HistoryDisallowed::NothingToRedo)),
+            matches!(
+                result,
+                Outcome::Disallowed(HistoryDisallowed::NothingToRedo)
+            ),
             "redo on empty stack must return Disallowed(NothingToRedo)"
         );
     }
@@ -634,28 +731,50 @@ mod tests {
     fn undo_restores_prior_state_and_returns_undone_frame() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let state_before = engine.state().clone();
         let outcome = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
-        let committed_frame = if let Outcome::Committed(f) = outcome { f } else { panic!("expected Committed") };
+        let committed_frame = if let Outcome::Committed(f) = outcome {
+            f
+        } else {
+            panic!("expected Committed")
+        };
         let state_after_dispatch = engine.state().clone();
-        assert_ne!(state_before, state_after_dispatch, "dispatch must have changed state");
+        assert_ne!(
+            state_before, state_after_dispatch,
+            "dispatch must have changed state"
+        );
 
         let undo_result = engine.undo().unwrap();
         if let Outcome::Undone(frame) = undo_result {
-            assert_eq!(frame, committed_frame, "undone frame must match committed frame");
+            assert_eq!(
+                frame, committed_frame,
+                "undone frame must match committed frame"
+            );
         } else {
             panic!("expected Undone");
         }
-        assert_eq!(engine.state(), &state_before, "undo must restore state to pre-dispatch snapshot");
+        assert_eq!(
+            engine.state(),
+            &state_before,
+            "undo must restore state to pre-dispatch snapshot"
+        );
     }
 
     #[test]
     fn redo_restores_state_after_undo_and_returns_redone_frame() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let _ = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
         let state_after_dispatch = engine.state().clone();
@@ -664,15 +783,26 @@ mod tests {
         assert_ne!(state_after_dispatch, state_before_dispatch);
 
         let redo_result = engine.redo().unwrap();
-        assert!(matches!(redo_result, Outcome::Redone(_)), "redo must return Redone");
-        assert_eq!(engine.state(), &state_after_dispatch, "redo must restore post-dispatch state");
+        assert!(
+            matches!(redo_result, Outcome::Redone(_)),
+            "redo must return Redone"
+        );
+        assert_eq!(
+            engine.state(),
+            &state_after_dispatch,
+            "redo must restore post-dispatch state"
+        );
     }
 
     #[test]
     fn undo_depth_and_redo_depth_track_correctly() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         assert_eq!(engine.undo_depth(), 0);
         assert_eq!(engine.redo_depth(), 0);
@@ -702,7 +832,11 @@ mod tests {
     fn new_committed_dispatch_after_undo_clears_redo_stack() {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
@@ -711,7 +845,11 @@ mod tests {
 
         // New commit on a different branch — erases the redo future.
         let _ = engine.dispatch(99u8, Reversibility::Reversible).unwrap();
-        assert_eq!(engine.redo_depth(), 0, "new Committed dispatch must clear redo stack");
+        assert_eq!(
+            engine.redo_depth(),
+            0,
+            "new Committed dispatch must clear redo stack"
+        );
     }
 
     #[test]
@@ -719,8 +857,16 @@ mod tests {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
             vec![
-                BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval },
-                BehaviorDef { name: "noop", order_key: 1, evaluate: noop_eval },
+                BehaviorDef {
+                    name: "echo",
+                    order_key: 0,
+                    evaluate: echo_eval,
+                },
+                BehaviorDef {
+                    name: "noop",
+                    order_key: 1,
+                    evaluate: noop_eval,
+                },
             ],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
@@ -730,7 +876,11 @@ mod tests {
         // Replace echo with noop-only engine to force NoChange
         let mut engine2 = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+            vec![BehaviorDef {
+                name: "noop",
+                order_key: 0,
+                evaluate: noop_eval,
+            }],
         );
         let _ = engine2.dispatch(1u8, Reversibility::Reversible).unwrap(); // NoChange (no diffs)
         // (redo depth was never populated, so assert on a fresh engine with setup)
@@ -738,14 +888,22 @@ mod tests {
         // Simpler test: dispatch + undo populates redo. NoChange after does NOT clear it.
         let mut e = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let _ = e.dispatch(1u8, Reversibility::Reversible).unwrap();
         let _ = e.undo().unwrap();
         assert_eq!(e.redo_depth(), 1);
         // Structural test: ensure redo_depth is still 1 after calling undo on empty stack (which returns Disallowed, not Committed).
         let _ = e.undo().unwrap(); // NothingToUndo — does not clear redo
-        assert_eq!(e.redo_depth(), 1, "Disallowed outcome must not clear redo stack");
+        assert_eq!(
+            e.redo_depth(),
+            1,
+            "Disallowed outcome must not clear redo stack"
+        );
     }
 
     #[test]
@@ -753,7 +911,11 @@ mod tests {
         use crate::outcome::HistoryDisallowed;
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         // Build up some history.
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
@@ -764,12 +926,26 @@ mod tests {
 
         // Irreversible commit: state changes, but both stacks are wiped.
         let _ = engine.dispatch(99u8, Reversibility::Irreversible).unwrap();
-        assert_eq!(engine.undo_depth(), 0, "irreversible commit must clear undo stack");
-        assert_eq!(engine.redo_depth(), 0, "irreversible commit must clear redo stack");
+        assert_eq!(
+            engine.undo_depth(),
+            0,
+            "irreversible commit must clear undo stack"
+        );
+        assert_eq!(
+            engine.redo_depth(),
+            0,
+            "irreversible commit must clear redo stack"
+        );
 
         // Calling undo/redo now returns Disallowed.
-        assert!(matches!(engine.undo().unwrap(), Outcome::Disallowed(HistoryDisallowed::NothingToUndo)));
-        assert!(matches!(engine.redo().unwrap(), Outcome::Disallowed(HistoryDisallowed::NothingToRedo)));
+        assert!(matches!(
+            engine.undo().unwrap(),
+            Outcome::Disallowed(HistoryDisallowed::NothingToUndo)
+        ));
+        assert!(matches!(
+            engine.redo().unwrap(),
+            Outcome::Disallowed(HistoryDisallowed::NothingToRedo)
+        ));
     }
 
     #[test]
@@ -780,14 +956,21 @@ mod tests {
         let initial_state = vec![10u8, 20u8, 30u8];
         let mut engine = Engine::<TestSpec>::new(
             initial_state.clone(),
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let _ = engine.dispatch(99u8, Reversibility::Reversible).unwrap();
         assert_ne!(engine.state(), &initial_state);
 
         let _ = engine.undo().unwrap();
-        assert_eq!(engine.state(), &initial_state,
-            "undo must restore exact pre-dispatch snapshot; no Reversible trait required");
+        assert_eq!(
+            engine.state(),
+            &initial_state,
+            "undo must restore exact pre-dispatch snapshot; no Reversible trait required"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -801,8 +984,11 @@ mod tests {
         let engine = Engine::<TestSpec>::new(vec![1u8, 2u8], vec![]);
         let before = engine.state().clone();
         // (no dispatch/undo/redo called)
-        assert_eq!(engine.state(), &before,
-            "engine state must not change without an operation");
+        assert_eq!(
+            engine.state(),
+            &before,
+            "engine state must not change without an operation"
+        );
     }
 
     #[test]
@@ -813,28 +999,50 @@ mod tests {
         let mut engine = Engine::<TestSpec>::new(
             vec![],
             vec![
-                BehaviorDef { name: "stopper", order_key: 0,  evaluate: stop_eval },
-                BehaviorDef { name: "echo",    order_key: 99, evaluate: echo_eval },
+                BehaviorDef {
+                    name: "stopper",
+                    order_key: 0,
+                    evaluate: stop_eval,
+                },
+                BehaviorDef {
+                    name: "echo",
+                    order_key: 99,
+                    evaluate: echo_eval,
+                },
             ],
         );
         let before = engine.state().clone();
         let _ = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
-        assert_eq!(engine.state(), &before,
-            "Aborted dispatch must leave state unchanged (atomicity)");
+        assert_eq!(
+            engine.state(),
+            &before,
+            "Aborted dispatch must leave state unchanged (atomicity)"
+        );
     }
 
     #[test]
     fn invariant_03_behaviors_evaluated_in_deterministic_order() {
         // Invariant 3: Behaviors evaluated in (order_key, name) order.
         let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
-            BehaviorDef { name: "b", order_key: 1, evaluate: tracing_2_eval },
-            BehaviorDef { name: "a", order_key: 0, evaluate: tracing_1_eval },
+            BehaviorDef {
+                name: "b",
+                order_key: 1,
+                evaluate: tracing_2_eval,
+            },
+            BehaviorDef {
+                name: "a",
+                order_key: 0,
+                evaluate: tracing_1_eval,
+            },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
-            assert_eq!(frame.diffs, vec![1u8, 2u8],
-                "lower order_key behavior must run first — (0,'a') before (1,'b')");
+            assert_eq!(
+                frame.diffs,
+                vec![1u8, 2u8],
+                "lower order_key behavior must run first — (0,'a') before (1,'b')"
+            );
         } else {
             panic!("expected Committed");
         }
@@ -845,15 +1053,25 @@ mod tests {
         // Invariant 4: Each behavior sees the working state at its moment of evaluation.
         // state_reading_eval (key=10) reads state AFTER echo_eval (key=0) has applied its diff.
         let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
-            BehaviorDef { name: "echo",        order_key: 0,  evaluate: echo_eval },
-            BehaviorDef { name: "state_reader", order_key: 10, evaluate: state_reading_eval },
+            BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            },
+            BehaviorDef {
+                name: "state_reader",
+                order_key: 10,
+                evaluate: state_reading_eval,
+            },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(5u8, Reversibility::Reversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
             // state_reading_eval emits state.len() after echo added one element.
-            assert_eq!(frame.diffs[1], 1u8,
-                "state_reading_eval must see working state with echo's diff already applied");
+            assert_eq!(
+                frame.diffs[1], 1u8,
+                "state_reading_eval must see working state with echo's diff already applied"
+            );
         } else {
             panic!("expected Committed");
         }
@@ -863,16 +1081,25 @@ mod tests {
     fn invariant_05_later_behaviors_see_earlier_applied_diffs() {
         // Invariant 5: Later behaviors see earlier applied diffs.
         let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
-            BehaviorDef { name: "echo",        order_key: 0,  evaluate: echo_eval },
-            BehaviorDef { name: "state_reader", order_key: 10, evaluate: state_reading_eval },
+            BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            },
+            BehaviorDef {
+                name: "state_reader",
+                order_key: 10,
+                evaluate: state_reading_eval,
+            },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(99u8, Reversibility::Reversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
-            assert_eq!(frame.diffs.len(), 2,
-                "both behaviors must have contributed");
-            assert_eq!(frame.diffs[1], 1u8,
-                "state_reader saw length=1 (echo's diff applied before state_reader ran)");
+            assert_eq!(frame.diffs.len(), 2, "both behaviors must have contributed");
+            assert_eq!(
+                frame.diffs[1], 1u8,
+                "state_reader saw length=1 (echo's diff applied before state_reader ran)"
+            );
         } else {
             panic!("expected Committed");
         }
@@ -885,10 +1112,17 @@ mod tests {
         let initial = vec![7u8];
         let engine = Engine::<TestSpec>::new(
             initial.clone(),
-            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+            vec![BehaviorDef {
+                name: "noop",
+                order_key: 0,
+                evaluate: noop_eval,
+            }],
         );
-        assert_eq!(engine.state(), &initial,
-            "committed state must be unchanged — behaviors receive &State, cannot mutate directly");
+        assert_eq!(
+            engine.state(),
+            &initial,
+            "committed state must be unchanged — behaviors receive &State, cannot mutate directly"
+        );
     }
 
     #[test]
@@ -896,11 +1130,18 @@ mod tests {
         // Invariant 7: The engine applies diffs centrally (not behaviors).
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let _ = engine.dispatch(42u8, Reversibility::Reversible).unwrap();
-        assert_eq!(engine.state(), &vec![42u8],
-            "engine applied the diff centrally; state contains the pushed byte");
+        assert_eq!(
+            engine.state(),
+            &vec![42u8],
+            "engine applied the diff centrally; state contains the pushed byte"
+        );
     }
 
     #[test]
@@ -908,13 +1149,20 @@ mod tests {
         // Invariant 8: Any diff that mutates state must append at least one trace entry.
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "t", order_key: 0, evaluate: tracing_5_eval }],
+            vec![BehaviorDef {
+                name: "t",
+                order_key: 0,
+                evaluate: tracing_5_eval,
+            }],
         );
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
             assert_eq!(frame.diffs.len(), 1);
-            assert_eq!(frame.traces.len(), 1,
-                "each diff must produce at least one trace entry");
+            assert_eq!(
+                frame.traces.len(),
+                1,
+                "each diff must produce at least one trace entry"
+            );
             assert!(!frame.traces[0].is_empty(), "trace entry must be non-empty");
         } else {
             panic!("expected Committed");
@@ -925,16 +1173,28 @@ mod tests {
     fn invariant_09_trace_generated_in_execution_order() {
         // Invariant 9: Trace is generated in execution order, not reconstructed later.
         let behaviors: Vec<BehaviorDef<TestSpec>> = vec![
-            BehaviorDef { name: "first",  order_key: 0, evaluate: tracing_10_eval },
-            BehaviorDef { name: "second", order_key: 1, evaluate: tracing_20_eval },
+            BehaviorDef {
+                name: "first",
+                order_key: 0,
+                evaluate: tracing_10_eval,
+            },
+            BehaviorDef {
+                name: "second",
+                order_key: 1,
+                evaluate: tracing_20_eval,
+            },
         ];
         let mut engine = Engine::<TestSpec>::new(vec![], behaviors);
         let outcome = engine.dispatch(0u8, Reversibility::Reversible).unwrap();
         if let Outcome::Committed(frame) = outcome {
-            assert_eq!(frame.traces[0], "applied 10",
-                "first diff's trace must appear first");
-            assert_eq!(frame.traces[1], "applied 20",
-                "second diff's trace must appear second");
+            assert_eq!(
+                frame.traces[0], "applied 10",
+                "first diff's trace must appear first"
+            );
+            assert_eq!(
+                frame.traces[1], "applied 20",
+                "second diff's trace must appear second"
+            );
         } else {
             panic!("expected Committed");
         }
@@ -945,19 +1205,35 @@ mod tests {
         // Invariant 10: Only successful, non-empty transitions produce frames.
         let mut noop_engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+            vec![BehaviorDef {
+                name: "noop",
+                order_key: 0,
+                evaluate: noop_eval,
+            }],
         );
-        let noop_outcome = noop_engine.dispatch(0u8, Reversibility::Reversible).unwrap();
-        assert!(matches!(noop_outcome, Outcome::NoChange),
-            "zero diffs must return NoChange, not a frame");
+        let noop_outcome = noop_engine
+            .dispatch(0u8, Reversibility::Reversible)
+            .unwrap();
+        assert!(
+            matches!(noop_outcome, Outcome::NoChange),
+            "zero diffs must return NoChange, not a frame"
+        );
 
         let mut echo_engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
-        let echo_outcome = echo_engine.dispatch(1u8, Reversibility::Reversible).unwrap();
-        assert!(matches!(echo_outcome, Outcome::Committed(_)),
-            "non-zero diffs must return Committed(frame)");
+        let echo_outcome = echo_engine
+            .dispatch(1u8, Reversibility::Reversible)
+            .unwrap();
+        assert!(
+            matches!(echo_outcome, Outcome::Committed(_)),
+            "non-zero diffs must return Committed(frame)"
+        );
     }
 
     #[test]
@@ -966,26 +1242,46 @@ mod tests {
         let mut engine = Engine::<TestSpec>::new(
             vec![10u8],
             vec![
-                BehaviorDef { name: "stopper", order_key: 0,  evaluate: stop_eval },
-                BehaviorDef { name: "echo",    order_key: 99, evaluate: echo_eval },
+                BehaviorDef {
+                    name: "stopper",
+                    order_key: 0,
+                    evaluate: stop_eval,
+                },
+                BehaviorDef {
+                    name: "echo",
+                    order_key: 99,
+                    evaluate: echo_eval,
+                },
             ],
         );
         let before = engine.state().clone();
 
         // Aborted — state must be unchanged
         let _ = engine.dispatch(99u8, Reversibility::Reversible).unwrap();
-        assert_eq!(engine.state(), &before,
-            "Aborted dispatch must not modify committed state");
+        assert_eq!(
+            engine.state(),
+            &before,
+            "Aborted dispatch must not modify committed state"
+        );
 
         // NoChange — state must still be unchanged
         let mut noop_engine = Engine::<TestSpec>::new(
             vec![10u8],
-            vec![BehaviorDef { name: "noop", order_key: 0, evaluate: noop_eval }],
+            vec![BehaviorDef {
+                name: "noop",
+                order_key: 0,
+                evaluate: noop_eval,
+            }],
         );
         let before2 = noop_engine.state().clone();
-        let _ = noop_engine.dispatch(0u8, Reversibility::Reversible).unwrap();
-        assert_eq!(noop_engine.state(), &before2,
-            "NoChange dispatch must not modify committed state");
+        let _ = noop_engine
+            .dispatch(0u8, Reversibility::Reversible)
+            .unwrap();
+        assert_eq!(
+            noop_engine.state(),
+            &before2,
+            "NoChange dispatch must not modify committed state"
+        );
     }
 
     #[test]
@@ -993,15 +1289,22 @@ mod tests {
         // Invariant 12: Behavior state lives inside the main state tree (not engine internals).
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let initial = engine.state().clone();
         let _ = engine.dispatch(5u8, Reversibility::Reversible).unwrap();
         assert_ne!(engine.state(), &initial);
 
         let _ = engine.undo().unwrap();
-        assert_eq!(engine.state(), &initial,
-            "undo must restore full state including any behavior-local state embedded in it");
+        assert_eq!(
+            engine.state(),
+            &initial,
+            "undo must restore full state including any behavior-local state embedded in it"
+        );
     }
 
     #[test]
@@ -1009,18 +1312,30 @@ mod tests {
         // Invariant 13: Undo/redo operate on canonical stored frames — not re-dispatch.
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let dispatch_outcome = engine.dispatch(77u8, Reversibility::Reversible).unwrap();
-        let committed_frame = if let Outcome::Committed(f) = dispatch_outcome { f }
-            else { panic!("expected Committed") };
+        let committed_frame = if let Outcome::Committed(f) = dispatch_outcome {
+            f
+        } else {
+            panic!("expected Committed")
+        };
 
         let undo_outcome = engine.undo().unwrap();
-        let undone_frame = if let Outcome::Undone(f) = undo_outcome { f }
-            else { panic!("expected Undone") };
+        let undone_frame = if let Outcome::Undone(f) = undo_outcome {
+            f
+        } else {
+            panic!("expected Undone")
+        };
 
-        assert_eq!(committed_frame, undone_frame,
-            "frame returned by undo must be the canonical stored frame from the original dispatch");
+        assert_eq!(
+            committed_frame, undone_frame,
+            "frame returned by undo must be the canonical stored frame from the original dispatch"
+        );
     }
 
     #[test]
@@ -1028,17 +1343,27 @@ mod tests {
         // Invariant 14: Irreversible transitions are designated by the library user (not the engine).
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
         assert_eq!(engine.undo_depth(), 1);
 
         // User designates this dispatch as Irreversible — both stacks cleared.
         let _ = engine.dispatch(2u8, Reversibility::Irreversible).unwrap();
-        assert_eq!(engine.undo_depth(), 0,
-            "caller designated Irreversible — engine must clear undo stack");
-        assert_eq!(engine.redo_depth(), 0,
-            "caller designated Irreversible — engine must clear redo stack");
+        assert_eq!(
+            engine.undo_depth(),
+            0,
+            "caller designated Irreversible — engine must clear undo stack"
+        );
+        assert_eq!(
+            engine.redo_depth(),
+            0,
+            "caller designated Irreversible — engine must clear redo stack"
+        );
     }
 
     #[test]
@@ -1047,11 +1372,17 @@ mod tests {
         // aborted dispatch outcomes (Outcome variants).
         let mut engine = Engine::<TestSpec>::new(
             vec![],
-            vec![BehaviorDef { name: "echo", order_key: 0, evaluate: echo_eval }],
+            vec![BehaviorDef {
+                name: "echo",
+                order_key: 0,
+                evaluate: echo_eval,
+            }],
         );
         let result = engine.dispatch(1u8, Reversibility::Reversible);
-        assert!(result.is_ok(),
-            "normal dispatch must return Ok(Outcome), not Err(EngineError)");
+        assert!(
+            result.is_ok(),
+            "normal dispatch must return Ok(Outcome), not Err(EngineError)"
+        );
     }
 
     // -----------------------------------------------------------------------
@@ -1090,7 +1421,11 @@ mod tests {
         fn make_engine() -> Engine<IrrevSpec> {
             Engine::<IrrevSpec>::new(
                 vec![],
-                vec![BehaviorDef { name: "append", order_key: 0u32, evaluate: append_eval }],
+                vec![BehaviorDef {
+                    name: "append",
+                    order_key: 0u32,
+                    evaluate: append_eval,
+                }],
             )
         }
 
@@ -1099,8 +1434,11 @@ mod tests {
         fn irreversible_history_reversible_commit_is_undoable() {
             let mut engine = make_engine();
             let outcome = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
-            let committed_frame = if let Outcome::Committed(f) = outcome { f }
-                else { panic!("expected Committed") };
+            let committed_frame = if let Outcome::Committed(f) = outcome {
+                f
+            } else {
+                panic!("expected Committed")
+            };
 
             let undo_result = engine.undo().unwrap();
             assert!(
@@ -1116,16 +1454,22 @@ mod tests {
             let mut engine = make_engine();
             let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
             let _ = engine.dispatch(2u8, Reversibility::Reversible).unwrap();
-            assert_eq!(engine.undo_depth(), 2, "setup: two reversible frames on undo stack");
+            assert_eq!(
+                engine.undo_depth(),
+                2,
+                "setup: two reversible frames on undo stack"
+            );
 
             let _ = engine.dispatch(99u8, Reversibility::Irreversible).unwrap();
 
             assert_eq!(
-                engine.undo_depth(), 0,
+                engine.undo_depth(),
+                0,
                 "irreversible commit must clear undo stack to 0"
             );
             assert_eq!(
-                engine.redo_depth(), 0,
+                engine.redo_depth(),
+                0,
                 "irreversible commit must clear redo stack to 0"
             );
         }
@@ -1139,7 +1483,10 @@ mod tests {
 
             let result = engine.undo().unwrap();
             assert!(
-                matches!(result, Outcome::Disallowed(HistoryDisallowed::NothingToUndo)),
+                matches!(
+                    result,
+                    Outcome::Disallowed(HistoryDisallowed::NothingToUndo)
+                ),
                 "after irreversible commit, undo() must return Disallowed(NothingToUndo)"
             );
         }
@@ -1153,7 +1500,10 @@ mod tests {
 
             let result = engine.redo().unwrap();
             assert!(
-                matches!(result, Outcome::Disallowed(HistoryDisallowed::NothingToRedo)),
+                matches!(
+                    result,
+                    Outcome::Disallowed(HistoryDisallowed::NothingToRedo)
+                ),
                 "after irreversible commit, redo() must return Disallowed(NothingToRedo)"
             );
         }
@@ -1165,12 +1515,17 @@ mod tests {
             let mut engine = make_engine();
             let _ = engine.dispatch(1u8, Reversibility::Reversible).unwrap();
             let _ = engine.undo().unwrap();
-            assert_eq!(engine.redo_depth(), 1, "setup: undo must have populated redo stack");
+            assert_eq!(
+                engine.redo_depth(),
+                1,
+                "setup: undo must have populated redo stack"
+            );
 
             let _ = engine.dispatch(2u8, Reversibility::Irreversible).unwrap();
 
             assert_eq!(
-                engine.redo_depth(), 0,
+                engine.redo_depth(),
+                0,
                 "irreversible commit must clear redo stack even when it was populated before"
             );
         }

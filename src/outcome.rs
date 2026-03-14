@@ -88,9 +88,7 @@ where
     E::Trace: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.input == other.input
-            && self.diffs == other.diffs
-            && self.traces == other.traces
+        self.input == other.input && self.diffs == other.diffs && self.traces == other.traces
     }
 }
 
@@ -343,7 +341,10 @@ mod tests {
         let c = a.clone(); // Clone
         assert_eq!(a, b);
         assert_eq!(a, c);
-        assert_ne!(HistoryDisallowed::NothingToUndo, HistoryDisallowed::NothingToRedo);
+        assert_ne!(
+            HistoryDisallowed::NothingToUndo,
+            HistoryDisallowed::NothingToRedo
+        );
         let _ = format!("{:?}", a); // Debug
     }
 }

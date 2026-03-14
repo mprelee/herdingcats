@@ -15,8 +15,8 @@
 //! Run with: cargo run --example backgammon
 
 use herdingcats::{
-    Apply, BehaviorDef, BehaviorResult, Engine, EngineError, EngineSpec, Frame,
-    HistoryDisallowed, Outcome, Reversibility,
+    Apply, BehaviorDef, BehaviorResult, Engine, EngineError, EngineSpec, Frame, HistoryDisallowed,
+    Outcome, Reversibility,
 };
 
 // ---------------------------------------------------------------------------
@@ -122,10 +122,7 @@ fn print_dispatch(
 ) {
     match result {
         Ok(Outcome::Committed(_)) => {
-            println!(
-                "[dispatch] {} => Committed{}",
-                label, reversibility_label
-            )
+            println!("[dispatch] {} => Committed{}", label, reversibility_label)
         }
         Ok(Outcome::Aborted(reason)) => {
             println!("[dispatch] {} => Aborted({})", label, reason)
@@ -144,9 +141,7 @@ fn print_dispatch(
     }
 }
 
-fn print_undo(
-    result: &Result<Outcome<Frame<BackgammonSpec>, HistoryDisallowed>, EngineError>,
-) {
+fn print_undo(result: &Result<Outcome<Frame<BackgammonSpec>, HistoryDisallowed>, EngineError>) {
     match result {
         Ok(Outcome::Undone(frame)) => {
             println!("[undo] => Undone (was: {:?})", frame.input)
@@ -173,8 +168,16 @@ fn main() {
     let mut engine = Engine::<BackgammonSpec>::new(
         initial_state,
         vec![
-            BehaviorDef { name: "RollDice",  order_key: 0, evaluate: roll_dice_eval },
-            BehaviorDef { name: "MovePiece", order_key: 1, evaluate: move_piece_eval },
+            BehaviorDef {
+                name: "RollDice",
+                order_key: 0,
+                evaluate: roll_dice_eval,
+            },
+            BehaviorDef {
+                name: "MovePiece",
+                order_key: 1,
+                evaluate: move_piece_eval,
+            },
         ],
     );
 
@@ -235,5 +238,7 @@ fn main() {
     print_undo(&r);
 
     println!();
-    println!("Demo complete. Key insight: irreversible transitions permanently erase undo history.");
+    println!(
+        "Demo complete. Key insight: irreversible transitions permanently erase undo history."
+    );
 }

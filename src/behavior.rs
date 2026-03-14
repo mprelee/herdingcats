@@ -158,8 +158,7 @@ pub struct BehaviorDef<E: EngineSpec> {
     /// Note: call as `(behavior.evaluate)(input, state)` — the parentheses
     /// are required because Rust would otherwise interpret `behavior.evaluate(...)`
     /// as a method call rather than a fn pointer call.
-    pub evaluate:
-        fn(&E::Input, &E::State) -> BehaviorResult<E::Diff, E::NonCommittedInfo>,
+    pub evaluate: fn(&E::Input, &E::State) -> BehaviorResult<E::Diff, E::NonCommittedInfo>,
 }
 
 impl<E: EngineSpec> std::fmt::Debug for BehaviorDef<E>
@@ -275,6 +274,9 @@ mod tests {
         let debug_str = format!("{:?}", b);
         assert!(debug_str.contains("passthrough"), "debug must include name");
         assert!(debug_str.contains("42"), "debug must include order_key");
-        assert!(debug_str.contains("fn(...)"), "debug must show evaluate as fn placeholder");
+        assert!(
+            debug_str.contains("fn(...)"),
+            "debug must show evaluate as fn placeholder"
+        );
     }
 }

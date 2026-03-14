@@ -11,16 +11,16 @@
 //!
 //! All public types are re-exported at the crate root.
 
-mod spec;
-mod behavior;
-mod outcome;
 mod apply;
-mod reversibility;
+mod behavior;
 mod engine;
+mod outcome;
+mod reversibility;
+mod spec;
 
-pub use crate::spec::EngineSpec;
-pub use crate::behavior::{BehaviorDef, BehaviorResult};
-pub use crate::outcome::{EngineError, Frame, HistoryDisallowed, NonCommittedOutcome, Outcome};
 pub use crate::apply::Apply;
-pub use crate::reversibility::Reversibility;
+pub use crate::behavior::{BehaviorDef, BehaviorResult};
 pub use crate::engine::Engine;
+pub use crate::outcome::{EngineError, Frame, HistoryDisallowed, NonCommittedOutcome, Outcome};
+pub use crate::reversibility::Reversibility;
+pub use crate::spec::EngineSpec;

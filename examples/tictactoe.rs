@@ -62,7 +62,11 @@ enum TicTacToeInput {
 
 #[derive(Debug, Clone)]
 enum TicTacToeDiff {
-    PlaceMarker { row: usize, col: usize, player: Player },
+    PlaceMarker {
+        row: usize,
+        col: usize,
+        player: Player,
+    },
     SwitchPlayer,
     SetGameOver,
 }
@@ -124,10 +128,14 @@ fn validate_cell(
 ) -> BehaviorResult<TicTacToeDiff, String> {
     let TicTacToeInput::Place { row, col } = input;
     if *row > 2 || *col > 2 {
-        return BehaviorResult::Stop(NonCommittedOutcome::InvalidInput("out of bounds".to_string()));
+        return BehaviorResult::Stop(NonCommittedOutcome::InvalidInput(
+            "out of bounds".to_string(),
+        ));
     }
     if state.board[*row][*col].is_some() {
-        return BehaviorResult::Stop(NonCommittedOutcome::Disallowed("cell already occupied".to_string()));
+        return BehaviorResult::Stop(NonCommittedOutcome::Disallowed(
+            "cell already occupied".to_string(),
+        ));
     }
     BehaviorResult::Continue(vec![])
 }
@@ -158,7 +166,10 @@ fn has_winner(board: &[[Option<Player>; 3]; 3], player: &Player) -> bool {
     }
     // Columns
     for col in 0..3usize {
-        if board.iter().all(|row_cells| row_cells[col].as_ref() == Some(player)) {
+        if board
+            .iter()
+            .all(|row_cells| row_cells[col].as_ref() == Some(player))
+        {
             return true;
         }
     }
@@ -245,9 +256,7 @@ fn print_dispatch(
     }
 }
 
-fn print_undo(
-    result: &Result<Outcome<Frame<TicTacToeSpec>, HistoryDisallowed>, EngineError>,
-) {
+fn print_undo(result: &Result<Outcome<Frame<TicTacToeSpec>, HistoryDisallowed>, EngineError>) {
     match result {
         Ok(Outcome::Undone(frame)) => println!(
             "[undo]     => Undone (diffs: {}, traces: {:?})",
@@ -257,17 +266,18 @@ fn print_undo(
         Ok(Outcome::Disallowed(reason)) => {
             println!("[undo]     => Disallowed({:?})", reason)
         }
-        Ok(Outcome::Committed(_)) | Ok(Outcome::Redone(_)) | Ok(Outcome::NoChange)
-        | Ok(Outcome::InvalidInput(_)) | Ok(Outcome::Aborted(_)) => {
+        Ok(Outcome::Committed(_))
+        | Ok(Outcome::Redone(_))
+        | Ok(Outcome::NoChange)
+        | Ok(Outcome::InvalidInput(_))
+        | Ok(Outcome::Aborted(_)) => {
             unreachable!("undo only returns Undone or Disallowed")
         }
         Err(e) => println!("[undo]     => EngineError({:?})", e),
     }
 }
 
-fn print_redo(
-    result: &Result<Outcome<Frame<TicTacToeSpec>, HistoryDisallowed>, EngineError>,
-) {
+fn print_redo(result: &Result<Outcome<Frame<TicTacToeSpec>, HistoryDisallowed>, EngineError>) {
     match result {
         Ok(Outcome::Redone(frame)) => println!(
             "[redo]     => Redone (diffs: {}, traces: {:?})",
@@ -277,8 +287,11 @@ fn print_redo(
         Ok(Outcome::Disallowed(reason)) => {
             println!("[redo]     => Disallowed({:?})", reason)
         }
-        Ok(Outcome::Committed(_)) | Ok(Outcome::Undone(_)) | Ok(Outcome::NoChange)
-        | Ok(Outcome::InvalidInput(_)) | Ok(Outcome::Aborted(_)) => {
+        Ok(Outcome::Committed(_))
+        | Ok(Outcome::Undone(_))
+        | Ok(Outcome::NoChange)
+        | Ok(Outcome::InvalidInput(_))
+        | Ok(Outcome::Aborted(_)) => {
             unreachable!("redo only returns Redone or Disallowed")
         }
         Err(e) => println!("[redo]     => EngineError({:?})", e),
@@ -298,60 +311,120 @@ fn main() {
     // Build the engine with 4 behaviors.
     // Behaviors are sorted by (order_key, name) — evaluation order is deterministic.
     let behaviors: Vec<BehaviorDef<TicTacToeSpec>> = vec![
-        BehaviorDef { name: "ValidateTurn",  order_key: 0, evaluate: validate_turn },
-        BehaviorDef { name: "ValidateCell",  order_key: 1, evaluate: validate_cell },
-        BehaviorDef { name: "PlaceMarker",   order_key: 2, evaluate: place_marker },
-        BehaviorDef { name: "CheckWin",      order_key: 3, evaluate: check_win },
+        BehaviorDef {
+            name: "ValidateTurn",
+            order_key: 0,
+            evaluate: validate_turn,
+        },
+        BehaviorDef {
+            name: "ValidateCell",
+            order_key: 1,
+            evaluate: validate_cell,
+        },
+        BehaviorDef {
+            name: "PlaceMarker",
+            order_key: 2,
+            evaluate: place_marker,
+        },
+        BehaviorDef {
+            name: "CheckWin",
+            order_key: 3,
+            evaluate: check_win,
+        },
     ];
     let mut engine = Engine::<TicTacToeSpec>::new(TicTacToeState::default(), behaviors);
 
     // ── Step 1: X places at (0,0) — Committed ────────────────────────────────
     println!("Step 1: X places at (0,0)  [demonstrates: Committed]");
-    let result = engine.dispatch(TicTacToeInput::Place { row: 0, col: 0 }, Reversibility::Reversible);
+    let result = engine.dispatch(
+        TicTacToeInput::Place { row: 0, col: 0 },
+        Reversibility::Reversible,
+    );
     print_dispatch("Place(0,0) by X", &result);
     print_board(engine.state());
-    println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
+    println!(
+        "  undo_depth={} redo_depth={}",
+        engine.undo_depth(),
+        engine.redo_depth()
+    );
     println!();
 
     // ── Step 2: O places at (1,1) — Committed ────────────────────────────────
     println!("Step 2: O places at (1,1)  [demonstrates: Committed]");
-    let result = engine.dispatch(TicTacToeInput::Place { row: 1, col: 1 }, Reversibility::Reversible);
+    let result = engine.dispatch(
+        TicTacToeInput::Place { row: 1, col: 1 },
+        Reversibility::Reversible,
+    );
     print_dispatch("Place(1,1) by O", &result);
     print_board(engine.state());
-    println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
+    println!(
+        "  undo_depth={} redo_depth={}",
+        engine.undo_depth(),
+        engine.redo_depth()
+    );
     println!();
 
     // ── Step 3: X tries (0,0) again — Disallowed (cell already occupied) ────
     println!("Step 3: X tries (0,0) again  [demonstrates: Disallowed — ValidateCell fires]");
-    let result = engine.dispatch(TicTacToeInput::Place { row: 0, col: 0 }, Reversibility::Reversible);
+    let result = engine.dispatch(
+        TicTacToeInput::Place { row: 0, col: 0 },
+        Reversibility::Reversible,
+    );
     print_dispatch("Place(0,0) again", &result);
     println!("  (board unchanged — Disallowed leaves state intact)");
-    println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
+    println!(
+        "  undo_depth={} redo_depth={}",
+        engine.undo_depth(),
+        engine.redo_depth()
+    );
     println!();
 
     // ── Step 4: undo O's move — Undone ───────────────────────────────────────
     println!("Step 4: undo  [demonstrates: Undone]");
-    println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
+    println!(
+        "  undo_depth={} redo_depth={}",
+        engine.undo_depth(),
+        engine.redo_depth()
+    );
     let result = engine.undo();
     print_undo(&result);
     print_board(engine.state());
-    println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
+    println!(
+        "  undo_depth={} redo_depth={}",
+        engine.undo_depth(),
+        engine.redo_depth()
+    );
     println!();
 
     // ── Step 5: redo O's move — Redone ───────────────────────────────────────
     println!("Step 5: redo  [demonstrates: Redone]");
-    println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
+    println!(
+        "  undo_depth={} redo_depth={}",
+        engine.undo_depth(),
+        engine.redo_depth()
+    );
     let result = engine.redo();
     print_redo(&result);
     print_board(engine.state());
-    println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
+    println!(
+        "  undo_depth={} redo_depth={}",
+        engine.undo_depth(),
+        engine.redo_depth()
+    );
     println!();
 
     // ── Step 6: X tries (3,3) — InvalidInput (out of bounds) ────────────────
     println!("Step 6: X tries (3,3)  [demonstrates: InvalidInput — ValidateCell out-of-bounds]");
-    let result = engine.dispatch(TicTacToeInput::Place { row: 3, col: 3 }, Reversibility::Reversible);
+    let result = engine.dispatch(
+        TicTacToeInput::Place { row: 3, col: 3 },
+        Reversibility::Reversible,
+    );
     print_dispatch("Place(3,3) out-of-bounds", &result);
-    println!("  undo_depth={} redo_depth={}", engine.undo_depth(), engine.redo_depth());
+    println!(
+        "  undo_depth={} redo_depth={}",
+        engine.undo_depth(),
+        engine.redo_depth()
+    );
     println!();
 
     // ── Step 7: NoChange via a fresh zero-behavior engine ────────────────────
@@ -372,23 +445,37 @@ fn main() {
     println!();
 
     // ── Step 8: Play to X wins — Committed with SetGameOver ──────────────────
-    println!("Step 8: Play to X winning position  [demonstrates: Committed + CheckWin SetGameOver]");
+    println!(
+        "Step 8: Play to X winning position  [demonstrates: Committed + CheckWin SetGameOver]"
+    );
     // Resume from main engine: board has X@(0,0), O@(1,1). It is X's turn.
     // X: (0,1) → Committed
-    let result = engine.dispatch(TicTacToeInput::Place { row: 0, col: 1 }, Reversibility::Reversible);
+    let result = engine.dispatch(
+        TicTacToeInput::Place { row: 0, col: 1 },
+        Reversibility::Reversible,
+    );
     print_dispatch("Place(0,1) by X", &result);
     // O: (2,0) → Committed
-    let result = engine.dispatch(TicTacToeInput::Place { row: 2, col: 0 }, Reversibility::Reversible);
+    let result = engine.dispatch(
+        TicTacToeInput::Place { row: 2, col: 0 },
+        Reversibility::Reversible,
+    );
     print_dispatch("Place(2,0) by O", &result);
     // X: (0,2) → Committed + SetGameOver (X wins row 0)
-    let result = engine.dispatch(TicTacToeInput::Place { row: 0, col: 2 }, Reversibility::Reversible);
+    let result = engine.dispatch(
+        TicTacToeInput::Place { row: 0, col: 2 },
+        Reversibility::Reversible,
+    );
     print_dispatch("Place(0,2) by X — wins row 0!", &result);
     print_board(engine.state());
     println!();
 
     // ── Step 9: Post-game dispatch — Disallowed (ValidateTurn: game_over) ───
     println!("Step 9: Dispatch after game over  [demonstrates: Disallowed — ValidateTurn fires]");
-    let result = engine.dispatch(TicTacToeInput::Place { row: 2, col: 2 }, Reversibility::Reversible);
+    let result = engine.dispatch(
+        TicTacToeInput::Place { row: 2, col: 2 },
+        Reversibility::Reversible,
+    );
     print_dispatch("Place(2,2) after game over", &result);
     println!();
 
