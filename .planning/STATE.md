@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: milestone
 status: planning
-stopped_at: Phase 2 context gathered
-last_updated: "2026-03-14T00:18:49.545Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-03-14T00:35:36.760Z"
 last_activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 5
+  completed_plans: 3
   percent: 0
 ---
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 01-core-types P01 | 1 | 1 tasks | 2 files |
 | Phase 01-core-types P02 | 3min | 3 tasks | 5 files |
+| Phase 02-dispatch P01 | 2min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -67,6 +68,8 @@ Recent decisions affecting current work:
 - [Phase 01-core-types]: Used pub mod spec (not mod spec) in lib.rs to satisfy clippy dead_code without adding pub use — preserves Plan 02 flat re-export job
 - [Phase 01-core-types]: Outcome is not #[non_exhaustive] — 7 variants are stable public contract; EngineError IS #[non_exhaustive] — engine may surface new errors in future versions
 - [Phase 01-core-types]: lib.rs uses private mod declarations + pub use re-exports — flat herdingcats::* namespace, no sub-path exposure
+- [Phase 02-dispatch]: Private mod apply/reversibility in lib.rs for test compilation; pub use deferred to Plan 02
+- [Phase 02-dispatch]: Reversibility not #[non_exhaustive] — two variants are complete stable contract
 
 ### Pending Todos
 
@@ -79,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T00:18:49.543Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-dispatch/02-CONTEXT.md
+Last session: 2026-03-14T00:35:36.758Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None

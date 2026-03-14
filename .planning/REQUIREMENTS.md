@@ -15,10 +15,10 @@
 
 ### Dispatch
 
-- [ ] **DISP-01**: `WorkingState<S>` provides CoW semantics — reads from committed state until first write, clones substate only on first write
+- [x] **DISP-01**: `WorkingState<S>` provides CoW semantics — reads from committed state until first write, clones substate only on first write
 - [ ] **DISP-02**: `dispatch(input, reversibility)` evaluates behaviors in deterministic `(order_key, name)` order, applies diffs immediately, appends trace at moment of diff application, commits `Frame` atomically if non-empty
 - [ ] **DISP-03**: `Frame<I, D, T>` stores `input`, `diff` collection, and `trace` as canonical committed record
-- [ ] **DISP-04**: `dispatch()` takes an explicit `Reversibility` parameter — callers cannot omit the declaration
+- [x] **DISP-04**: `dispatch()` takes an explicit `Reversibility` parameter — callers cannot omit the declaration
 
 ### History
 
@@ -72,10 +72,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CORE-03 | Phase 1 | Complete |
 | CORE-04 | Phase 1 | Complete |
 | CORE-05 | Phase 1 | Complete |
-| DISP-01 | Phase 2 | Pending |
+| DISP-01 | Phase 2 | Complete |
 | DISP-02 | Phase 2 | Pending |
 | DISP-03 | Phase 2 | Pending |
-| DISP-04 | Phase 2 | Pending |
+| DISP-04 | Phase 2 | Complete |
 | HIST-01 | Phase 3 | Pending |
 | HIST-02 | Phase 3 | Pending |
 | HIST-03 | Phase 3 | Pending |
