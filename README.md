@@ -29,14 +29,16 @@ require a `Default` implementation. Behavior-local state lives inside the main S
 
 ### Behavior
 
-A single game rule evaluated during dispatch. A Behavior receives an immutable borrow of
-the current working State and the Input, then either:
+A single game rule expressed as a `BehaviorDef` struct with a `name`, `order_key`, and
+`evaluate` fn pointer. During dispatch the engine calls each entry's `evaluate` fn pointer
+with an immutable borrow of the current working State and the Input, then either:
 
 - returns `Continue(diffs)` — zero or more Diffs to apply, dispatch continues
 - returns `Stop(outcome)` — halts dispatch immediately with a non-committed Outcome
 
-Behaviors are sorted once at construction by `(order_key, name)` and run in that order
-for every dispatch call. They cannot mutate State directly.
+`BehaviorDef` entries are sorted once at construction by `(order_key, name)` and run in
+that order for every dispatch call. The shared borrow prevents mutation — behaviors cannot
+mutate State directly.
 
 ### Diff
 
@@ -81,8 +83,8 @@ pub enum Outcome<F, N> {
 
 ### Engine
 
-The central coordinator. Holds the committed State, the ordered list of Behaviors, and
-the undo/redo history stacks. Exposes `dispatch`, `undo`, and `redo`.
+The central coordinator. Holds the committed State, the ordered list of `BehaviorDef`
+entries, and the undo/redo history stacks. Exposes `dispatch`, `undo`, and `redo`.
 
 ## How Dispatch Works
 
@@ -111,7 +113,7 @@ are rolled, you cannot undo before the roll).
 ## Quick Start
 
 ```rust
-use herdingcats::{Engine, EngineSpec, Apply, Behavior, BehaviorResult, Reversibility};
+use herdingcats::{Engine, EngineSpec, Apply, BehaviorDef, BehaviorResult, Reversibility};
 
 // 1. Define your spec (bundles all associated types)
 struct MySpec;
@@ -136,19 +138,15 @@ impl EngineSpec for MySpec {
     type OrderKey = u32;
 }
 
-// 3. Implement a Behavior
-struct AppendBehavior;
-
-impl Behavior<MySpec> for AppendBehavior {
-    fn name(&self) -> &'static str { "append" }
-    fn order_key(&self) -> u32 { 0 }
-    fn evaluate(&self, input: &u8, _state: &Vec<u8>) -> BehaviorResult<AppendDiff, String> {
-        BehaviorResult::Continue(vec![AppendDiff(*input)])
-    }
+// 3. Define a BehaviorDef with an evaluate fn pointer
+fn append_eval(input: &u8, _state: &Vec<u8>) -> BehaviorResult<AppendDiff, String> {
+    BehaviorResult::Continue(vec![AppendDiff(*input)])
 }
 
-// 4. Construct the Engine with initial State and behaviors
-let behaviors: Vec<Box<dyn Behavior<MySpec>>> = vec![Box::new(AppendBehavior)];
+// 4. Construct the Engine with initial State and BehaviorDef entries
+let behaviors = vec![
+    BehaviorDef::<MySpec> { name: "append", order_key: 0, evaluate: append_eval },
+];
 let engine = Engine::<MySpec>::new(vec![], behaviors);
 
 // 5. Dispatch an Input
