@@ -185,6 +185,7 @@ where
 }
 
 #[cfg(test)]
+#[allow(clippy::ptr_arg)]
 mod tests {
     use super::*;
     use crate::apply::Apply;

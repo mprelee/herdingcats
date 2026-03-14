@@ -236,6 +236,7 @@ impl<E: EngineSpec> Engine<E> {
 }
 
 #[cfg(test)]
+#[allow(clippy::ptr_arg)] // evaluate fn pointers must match BehaviorEval<E> exactly; &Vec is required when State = Vec
 mod tests {
     use super::*;
     use crate::apply::Apply;
@@ -1390,6 +1391,7 @@ mod tests {
     // -----------------------------------------------------------------------
 
     #[cfg(test)]
+    #[allow(clippy::ptr_arg)]
     mod irreversible_history_tests {
         use super::*;
         use crate::apply::Apply;

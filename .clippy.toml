@@ -1,0 +1,22 @@
+# HerdingCats Clippy configuration
+#
+# The project intentionally keeps Clippy strict (CI runs with `-D warnings`),
+# but a few lints conflict with the engine architecture.
+
+# --- API architecture exceptions ---
+
+# The engine uses strongly typed State in behavior signatures:
+#     fn(&Input, &State)
+# which may resolve to `&Vec<T>` for concrete engine specs.
+# Clippy prefers `&[T]`, but that would break the EngineSpec contract.
+allow = [
+    "clippy::ptr_arg",
+]
+
+# --- Optional future tuning ---
+#
+# These are not enabled yet but are useful if the project grows.
+#
+# cognitive-complexity-threshold = 25
+# too-many-arguments-threshold = 8
+# type-complexity-threshold = 250
