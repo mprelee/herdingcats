@@ -317,7 +317,7 @@ mod tests {
 
     /// Reads the current working state length and emits it as a diff, allowing
     /// verification that later behaviors see earlier diffs applied.
-    fn state_reading_eval(_input: &u8, state: &Vec<u8>) -> BehaviorResult<u8, String> {
+    fn state_reading_eval(_input: &u8, state: &[u8]) -> BehaviorResult<u8, String> {
         BehaviorResult::Continue(vec![state.len() as u8])
     }
 
