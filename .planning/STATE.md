@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: milestone
 status: planning
-stopped_at: Phase 4 context gathered
-last_updated: "2026-03-14T01:47:53.202Z"
+stopped_at: Completed 04-examples-and-tests-02-PLAN.md
+last_updated: "2026-03-14T02:04:09.830Z"
 last_activity: 2026-03-13 — Roadmap created, ready to begin planning Phase 1
 progress:
   total_phases: 4
   completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 10
+  completed_plans: 8
   percent: 0
 ---
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 02-dispatch P03 | 2min | 2 tasks | 2 files |
 | Phase 03-history P01 | 5 | 1 tasks | 2 files |
 | Phase 03-history P02 | 5min | 2 tasks | 2 files |
+| Phase 04-examples-and-tests P02 | 1min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -83,6 +84,8 @@ Recent decisions affecting current work:
 - [Phase 03-history]: Frame<E> Clone/PartialEq use manual impls with associated type bounds — derive macro adds E: Clone/PartialEq which unit struct specs cannot satisfy
 - [Phase 03-history]: undo()/redo() return Outcome<Frame<E>, HistoryDisallowed> not Outcome<Frame<E>, E::NonCommittedInfo> — intentional asymmetry, HistoryDisallowed is the specific reason type
 - [Phase 03-history]: Irreversible dispatch order: push to undo_stack then clear both stacks — state change commits, all history erased
+- [Phase 04-examples-and-tests]: All behaviors return Continue([]) for inputs they don't handle — no abort/abort-early short circuit needed in simple demos
+- [Phase 04-examples-and-tests]: BackgammonState.black_pos uses #[allow(dead_code)] — kept for domain clarity even though not exercised in the demo
 
 ### Pending Todos
 
@@ -95,6 +98,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-14T01:47:53.200Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-examples-and-tests/04-CONTEXT.md
+Last session: 2026-03-14T02:04:09.828Z
+Stopped at: Completed 04-examples-and-tests-02-PLAN.md
+Resume file: None
