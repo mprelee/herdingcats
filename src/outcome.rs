@@ -261,4 +261,30 @@ mod tests {
         takes_outcome(Outcome::NoChange);
         takes_error(EngineError::BehaviorPanic);
     }
+
+    #[test]
+    fn history_disallowed_variants_are_constructable_and_matchable() {
+        let reasons = vec![
+            HistoryDisallowed::NothingToUndo,
+            HistoryDisallowed::NothingToRedo,
+        ];
+        for reason in reasons {
+            // Exhaustive match — no wildcard arm needed (not #[non_exhaustive])
+            let _label = match reason {
+                HistoryDisallowed::NothingToUndo => "nothing_to_undo",
+                HistoryDisallowed::NothingToRedo => "nothing_to_redo",
+            };
+        }
+    }
+
+    #[test]
+    fn history_disallowed_derives_debug_clone_copy_partialeq_eq() {
+        let a = HistoryDisallowed::NothingToUndo;
+        let b = a; // Copy
+        let c = a.clone(); // Clone
+        assert_eq!(a, b);
+        assert_eq!(a, c);
+        assert_ne!(HistoryDisallowed::NothingToUndo, HistoryDisallowed::NothingToRedo);
+        let _ = format!("{:?}", a); // Debug
+    }
 }
